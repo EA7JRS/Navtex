@@ -2,7 +2,7 @@
 
 Receptor NAVTEX por software para Linux, con SDRplay o RTL-SDR. Escucha en segundo plano 518 y 490 kHz a la vez, o 4209,5 kHz en onda corta, guarda los mensajes y los enseña en una interfaz web en español que funciona sin Internet.
 
-Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.com/bartelvdh/Navtex) · licencia MIT · parte del ecosistema APRS LoRa+
+Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.com/bartelvdh/Navtex) · GPL-3.0-or-later · parte del ecosistema APRS LoRa+
 
 [![Donar con PayPal](https://img.shields.io/badge/Donar-PayPal-0070ba?logo=paypal&logoColor=white)](https://paypal.me/ea7jrs)
 
@@ -249,9 +249,9 @@ La interfaz no tiene contraseña: está pensada para la red local o la de a bord
 
 - El receptor original, con el demodulador y el descodificador SITOR-B, es de **bartelvdh**: [bartelvdh/Navtex](https://github.com/bartelvdh/Navtex).
 - Los cambios de este fork son © 2026 Manuel - EA7JRS.
-- Todo bajo licencia MIT; véase [LICENSE](LICENSE).
-- `web_server/https_fileserver.c` parte de un ejemplo de libmicrohttpd (LGPL 2.1 o posterior) y conserva su aviso.
-- La tabla de 4209,5 kHz de `estaciones.json` procede de Wikipedia y se distribuye bajo CC BY-SA 4.0.
+- Desde la versión 1.1.0 el fork se distribuye bajo **GPL-3.0-or-later** ([LICENSE](LICENSE)), con un permiso adicional para enlazarlo con la API de SDRplay.
+- El código original conserva su licencia MIT y su aviso ([LICENSE-MIT-original](LICENSE-MIT-original)).
+- El detalle de cada parte, incluidos los datos de las estaciones, está en [COPYING.md](COPYING.md).
 
 ## Apoya el proyecto
 

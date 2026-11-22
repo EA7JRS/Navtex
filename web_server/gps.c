@@ -6,7 +6,8 @@
  * The web interface reads them through /api/gps. Nothing is ever sent to the
  * GPS, and when gpsd is not there the thread just tries again later.
  *
- * 2026 - Manuel - EA7JRS (fork EA7JRS/Navtex), MIT licence.
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (c) 2026 Manuel - EA7JRS (fork EA7JRS/Navtex). See COPYING.md.
  */
 #define _DEFAULT_SOURCE
 #include <stdio.h>

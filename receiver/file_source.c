@@ -7,7 +7,8 @@
  *   - .wav, 16 bit, two channels (I and Q): what the receiver writes with -d;
  *   - anything else: raw unsigned 8 bit I/Q, what "rtl_sdr -s 252000" writes.
  *
- * 2026 - Manuel - EA7JRS (fork EA7JRS/Navtex), MIT licence.
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (c) 2026 Manuel - EA7JRS (fork EA7JRS/Navtex). See COPYING.md.
  */
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,6 +1,6 @@
 /*
  * Navtex · interfaz web (fork EA7JRS/Navtex)
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: GPL-3.0-or-later
  * Copyright (c) 2026 Manuel - EA7JRS
  *
  * Todo lo que llega por radio se escribe con textContent: nunca se interpreta

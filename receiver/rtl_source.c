@@ -13,7 +13,8 @@
  * The dongle is asked for 252 kS/s centred on 504 kHz, the same stream the
  * SDRplay source delivers after its hardware decimation.
  *
- * 2026 - Manuel - EA7JRS (fork EA7JRS/Navtex), MIT licence.
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (c) 2026 Manuel - EA7JRS (fork EA7JRS/Navtex). See COPYING.md.
  */
 #include <stdio.h>
 #include <string.h>

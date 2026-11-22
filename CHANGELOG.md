@@ -2,6 +2,18 @@
 
 Fork EA7JRS/Navtex del receptor NAVTEX de bartelvdh. Las entradas dicen también qué se probó y qué no. Lo descrito en una fase puede haber cambiado en las posteriores (por ejemplo, los servicios y sus ajustes): el estado actual es el del [README](README.md).
 
+## [1.1.0] - 2026-11-22
+
+### Licencia: GPL-3.0-or-later
+
+- El fork pasa de MIT a **GNU GPL versión 3 o posterior**, como el resto del ecosistema APRS LoRa+. El texto está en `LICENSE`.
+- Se concede un permiso adicional (sección 7 de la GPL versión 3) para enlazar el programa con la API de SDRplay, que es privativa.
+- El código original de bartelvdh conserva su licencia MIT y su aviso de copyright, en `LICENSE-MIT-original`.
+- `COPYING.md` explica qué licencia tiene cada parte, incluidos los datos de las estaciones.
+- La versión 1.0.0 se publicó bajo MIT y lo sigue estando para quien la obtuvo así.
+
+Sin cambios en el funcionamiento.
+
 ## [1.0.0] - 2026-11-22
 
 Primera versión del fork. Parte del código de bartelvdh (commit `964d6bb`, 25-02-2025) y lo amplía en ocho fases, que se detallan a continuación de la más reciente a la más antigua.

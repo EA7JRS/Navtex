@@ -5,7 +5,8 @@
  * (halfway between 490 and 518 kHz) and hands them to the common ring
  * buffer. The demodulator does not care which receiver produced them.
  *
- * 2026 - Manuel - EA7JRS (fork EA7JRS/Navtex), MIT licence.
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (c) 2026 Manuel - EA7JRS (fork EA7JRS/Navtex). See COPYING.md.
  */
 #ifndef IQ_SOURCE_H
 #define IQ_SOURCE_H

@@ -1,6 +1,7 @@
 /*
  * Navtex web server: position from gpsd.
- * 2026 - Manuel - EA7JRS (fork EA7JRS/Navtex), MIT licence.
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (c) 2026 Manuel - EA7JRS (fork EA7JRS/Navtex). See COPYING.md.
  */
 #ifndef NAVTEX_GPS_H
 #define NAVTEX_GPS_H
