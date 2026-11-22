@@ -33,26 +33,37 @@
  */
 
 
-//#include "platform.h"
+
+/*
+ * Navtex web server: serves the web GUI and a small JSON API backed by the
+ * SQLite message store.
+ *
+ * 2026 - Manuel - EA7JRS (fork EA7JRS/Navtex): request handling rewritten.
+ *  - URLs are length-checked and never copied into fixed buffers;
+ *  - /saveconfig only accepts the known tags and A-Z values;
+ *  - static files cannot be requested outside the web root;
+ *  - JSON answers are sent as application/json, files with their type;
+ *  - optional listen address:  navtexwebserver [port] [address]
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
+#include <ctype.h>
 #include <microhttpd.h>
 #include <sys/stat.h>
-#include <gnutls/gnutls.h>
-//#include <gcrypt.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include "../receiver/message_store.h"
 
-#define BUF_SIZE 1024
 #define MAX_URL_LEN 255
 
-// TODO remove if unused
-#define CAFILE "ca.pem"
-#define CRLFILE "crl.pem"
-
-#define EMPTY_PAGE "<html><head><title>File not found</title></head><body>File not found</body></html>"
-#define TEST_PAGE "<html><head><title>test test test test test test</title></head><body>completed</body></html>"
+#define NOT_FOUND_PAGE "<html><head><title>File not found</title></head><body>File not found</body></html>"
+#define BAD_REQUEST_PAGE "<html><head><title>Bad request</title></head><body>Bad request</body></html>"
+#define ERROR_JSON "{\"error\":\"database not available\"}"
 
 static ssize_t
 file_reader (void *cls, uint64_t pos, char *buf, size_t max)
@@ -70,216 +81,258 @@ file_free_callback (void *cls)
   fclose (file);
 }
 
+/* Queue a response made of a copy of `body`. */
+static enum MHD_Result
+send_text (struct MHD_Connection *connection, unsigned int status,
+           const char *body, const char *content_type, int api)
+{
+  struct MHD_Response *response;
+  enum MHD_Result ret;
+
+  response = MHD_create_response_from_buffer (strlen (body), (void *) body,
+                                              MHD_RESPMEM_MUST_COPY);
+  if (response == NULL)
+    return MHD_NO;
+  MHD_add_response_header (response, "Content-Type", content_type);
+  MHD_add_response_header (response, "X-Content-Type-Options", "nosniff");
+  if (api)
+  {
+    MHD_add_response_header (response, MHD_HTTP_HEADER_ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+    MHD_add_response_header (response, "Cache-Control", "no-store");
+  }
+  ret = MHD_queue_response (connection, status, response);
+  MHD_destroy_response (response);
+  return ret;
+}
+
+static const char *
+content_type_of (const char *path)
+{
+  const char *ext = strrchr (path, '.');
+
+  if (ext == NULL) return "application/octet-stream";
+  if (strcmp (ext, ".html") == 0) return "text/html; charset=UTF-8";
+  if (strcmp (ext, ".js") == 0)   return "text/javascript; charset=UTF-8";
+  if (strcmp (ext, ".css") == 0)  return "text/css; charset=UTF-8";
+  if (strcmp (ext, ".json") == 0) return "application/json";
+  if (strcmp (ext, ".map") == 0)  return "application/json";
+  if (strcmp (ext, ".txt") == 0)  return "text/plain; charset=UTF-8";
+  if (strcmp (ext, ".svg") == 0)  return "image/svg+xml";
+  if (strcmp (ext, ".png") == 0)  return "image/png";
+  if (strcmp (ext, ".ico") == 0)  return "image/x-icon";
+  return "application/octet-stream";
+}
+
+/* A static path is safe when it is relative, has no ".." component and only
+   uses plain file name characters. The server runs with the web root as its
+   working directory, so such a path cannot leave it. */
+static int
+safe_static_path (const char *path)
+{
+  const char *p;
+
+  if (path[0] == '\0' || path[0] == '/' || path[0] == '.')
+    return 0;
+  if (strstr (path, "..") != NULL || strstr (path, "//") != NULL)
+    return 0;
+  for (p = path; *p != '\0'; p++)
+    if (!isalnum ((unsigned char) *p) && strchr ("._-/", *p) == NULL)
+      return 0;
+  return 1;
+}
+
+/* GET /saveconfig/<tag>/<value>   (the value may be empty) */
+static enum MHD_Result
+handle_saveconfig (struct MHD_Connection *connection, const char *url)
+{
+  char tag[16];
+  char value[32];
+  const char *p = url + strlen ("/saveconfig/");
+  const char *slash = strchr (p, '/');
+  size_t tag_len, value_len;
+
+  if (slash == NULL)
+    return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+  tag_len = (size_t) (slash - p);
+  value_len = strlen (slash + 1);
+  if (tag_len == 0 || tag_len >= sizeof (tag) || value_len >= sizeof (value))
+    return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+  memcpy (tag, p, tag_len);
+  tag[tag_len] = '\0';
+  memcpy (value, slash + 1, value_len + 1);
+
+  /* update_config() validates the tag and the value and uses a bound statement */
+  if (update_config (tag, value) != 0)
+    return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+  return send_text (connection, MHD_HTTP_OK, "{}", "application/json", 1);
+}
+
 /* HTTP access handler call back */
-//static int
-enum MHD_Result 
+enum MHD_Result
 http_ahc (void *cls,
           struct MHD_Connection *connection,
           const char *url,
           const char *method,
           const char *version,
           const char *upload_data,
-	  size_t *upload_data_size, void **ptr)
+          size_t *upload_data_size, void **ptr)
 {
   static int aptr;
   struct MHD_Response *response;
-  int ret;
+  enum MHD_Result ret;
   FILE *file;
   struct stat buf;
+  const char *path;
 
-  //printf("URL:%s len:%d\n",url,strlen(url));
-  //printf("method: %s\n",method);
-  if ( (0 != strcmp (method, MHD_HTTP_METHOD_GET))  &&  (0 != strcmp (method, MHD_HTTP_METHOD_POST)) && (0 != strcmp (method, "OPTIONS")) ) 
-  {
-    printf("unexpected method\n");
+  (void) cls; (void) version; (void) upload_data;
+
+  if ( (0 != strcmp (method, MHD_HTTP_METHOD_GET)) && (0 != strcmp (method, MHD_HTTP_METHOD_POST)) && (0 != strcmp (method, "OPTIONS")) )
     return MHD_NO;              /* unexpected method */
-  }
   if (&aptr != *ptr)
     {
       /* do never respond on first call */
       *ptr = &aptr;
       return MHD_YES;
     }
+  if (*upload_data_size != 0)
+    {
+      /* a body is never expected: swallow it */
+      *upload_data_size = 0;
+      return MHD_YES;
+    }
   *ptr = NULL;                  /* reset when done */
-  if( strncmp(url,"/messagelist",11) == 0)
+
+  if (url == NULL || url[0] != '/' || strlen (url) > MAX_URL_LEN)
+    return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+
+  if (strcmp (url, "/messagelist") == 0)
   {
-      char *ml; 
-      ml = get_message_list();
-      response = MHD_create_response_from_buffer (strlen (ml),
-						  (void *) ml,
-						  MHD_RESPMEM_MUST_COPY);
-      MHD_add_response_header(response, MHD_HTTP_HEADER_ACCESS_CONTROL_ALLOW_ORIGIN, "*");
-      //MHD_add_response_header(response, "Referrer-Policy", "no-referrer");
-      MHD_add_response_header(response, "Content-Type", "text/html; charset=UTF-8");
-      ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
-      MHD_destroy_response (response);
-      free(ml);
+      char *ml = get_message_list ();
+      if (ml == NULL)
+        return send_text (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, ERROR_JSON, "application/json", 1);
+      ret = send_text (connection, MHD_HTTP_OK, ml, "application/json", 1);
+      free (ml);
+      return ret;
   }
-  else if( strncmp(url,"/config",6) == 0)
+  if (strcmp (url, "/config") == 0)
   {
-      char *ml; 
-      ml = get_config();
-      response = MHD_create_response_from_buffer (strlen (ml),
-						  (void *) ml,
-						  MHD_RESPMEM_MUST_COPY);
-      MHD_add_response_header(response, MHD_HTTP_HEADER_ACCESS_CONTROL_ALLOW_ORIGIN, "*");
-      //MHD_add_response_header(response, "Referrer-Policy", "no-referrer");
-      MHD_add_response_header(response, "Content-Type", "text/html; charset=UTF-8");
-      ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
-      MHD_destroy_response (response);
-      free_json_str(ml);
+      char *cfg = get_config ();
+      if (cfg == NULL)
+        return send_text (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, ERROR_JSON, "application/json", 1);
+      ret = send_text (connection, MHD_HTTP_OK, cfg, "application/json", 1);
+      free (cfg);
+      return ret;
   }
-  else if( strncmp(url,"/saveconfig",11) == 0)
+  if (strncmp (url, "/saveconfig/", 12) == 0)
+      return handle_saveconfig (connection, url);
+  if (strncmp (url, "/messagetext/", 13) == 0)
   {
-      char* nconfig;
-      char* ntag;
-      char urlcpy[80];
-
-	strcpy(urlcpy,url);
-
-      char* token = strtok(urlcpy, "/");
- 
-      // Keep printing tokens while one of the
-      // delimiters present in str[].
-      if (token != NULL) {
-          ntag = strtok(NULL, "/");
-      }
-      if (token != NULL) {
-          nconfig = strtok(NULL, "/");
-      }
-      else 
-      {
-          return (-1);
-      }
-	
-
-
-      update_config(ntag,nconfig);
-      response = MHD_create_response_from_buffer (0,
-                                                  (void *) NULL,
-                                                  MHD_RESPMEM_PERSISTENT);
-      MHD_add_response_header(response, MHD_HTTP_HEADER_ACCESS_CONTROL_ALLOW_ORIGIN, "*");
-      //MHD_add_response_header(response, "Referrer-Policy", "no-referrer");
-      MHD_add_response_header(response, "Content-Type", "text/html; charset=UTF-8");
-      ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
-      MHD_destroy_response (response);
-  }
-  else if(strncmp(url,"/messagetext",12) == 0)
-  {
-      unsigned int m_id; 
+      const char *digits = url + 13;
+      char *end;
+      unsigned long m_id;
       char *mt;
 
-      sscanf(url,"/messagetext/%u",&m_id);
-      mt = get_message_text(m_id);
-      response = MHD_create_response_from_buffer (strlen (mt),
-                                                  (void *) mt,
-                                                  MHD_RESPMEM_MUST_COPY);
-      MHD_add_response_header(response, MHD_HTTP_HEADER_ACCESS_CONTROL_ALLOW_ORIGIN, "*");
-      MHD_add_response_header(response, "Content-Type", "text/html; charset=UTF-8");
-      ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
-      MHD_destroy_response (response);
-      free(mt);
-  }
-  else 
-  {
-    if( strcmp(url,"/") == 0)
-    {
-	  file = fopen ("index.html", "r");
-    	  if (file == NULL)
-	  {
-	  }
-	  else
-	  {
-		stat ("index.html", &buf);
-	  }
-    }
-    else
-    {
-	    if ( (0 == stat (&url[1], &buf)) &&
-		       (S_ISREG (buf.st_mode)) )
-	    {
-		    file = fopen (&url[1], "rb");
-	    }
-	    else
-	    {
-		    file = NULL;
-	    }
-    }
-
-
-    if (file == NULL)
-    {
-      response = MHD_create_response_from_buffer (strlen (EMPTY_PAGE),
-						  (void *) EMPTY_PAGE,
-						  MHD_RESPMEM_PERSISTENT);
-      ret = MHD_queue_response (connection, MHD_HTTP_NOT_FOUND, response);
-      MHD_destroy_response (response);
-    }
-    else
-    {
-      response = MHD_create_response_from_callback (buf.st_size, 32 * 1024,     /* 32k PAGE_NOT_FOUND size */
-                                                    &file_reader, file,
-                                                    &file_free_callback);
-      if (response == NULL)
-	{
-	  fclose (file);
-	  return MHD_NO;
-	}
-      ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
-      MHD_destroy_response (response);
-    }
+      if (!isdigit ((unsigned char) digits[0]))
+        return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+      errno = 0;
+      m_id = strtoul (digits, &end, 10);
+      if (errno != 0 || *end != '\0' || m_id > 0x7fffffffUL)
+        return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+      mt = get_message_text ((unsigned int) m_id);
+      if (mt == NULL)
+        return send_text (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, ERROR_JSON, "application/json", 1);
+      ret = send_text (connection, MHD_HTTP_OK, mt, "application/json", 1);
+      free (mt);
+      return ret;
   }
 
+  /* Anything else is a file of the web GUI */
+  path = (strcmp (url, "/") == 0) ? "index.html" : &url[1];
+  file = NULL;
+  if (safe_static_path (path) && (0 == stat (path, &buf)) && S_ISREG (buf.st_mode))
+    file = fopen (path, "rb");
+  if (file == NULL)
+    return send_text (connection, MHD_HTTP_NOT_FOUND, NOT_FOUND_PAGE, "text/html; charset=UTF-8", 0);
+
+  response = MHD_create_response_from_callback (buf.st_size, 32 * 1024,
+                                                &file_reader, file,
+                                                &file_free_callback);
+  if (response == NULL)
+    {
+      fclose (file);
+      return MHD_NO;
+    }
+  MHD_add_response_header (response, "Content-Type", content_type_of (path));
+  MHD_add_response_header (response, "X-Content-Type-Options", "nosniff");
+  ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
+  MHD_destroy_response (response);
   return ret;
 }
 
 int
 main (int argc, char *const *argv)
 {
-  struct MHD_Daemon *TLS_daemon;
-  int port_nr;
+  struct MHD_Daemon *http_daemon;
+  struct sockaddr_in addr;
+  const char *address = NULL;
+  int port_nr = 8080;
+  unsigned int flags = MHD_USE_THREAD_PER_CONNECTION;
 
-  if (chdir(WEB_ROOT) != 0)
-    perror("chdir() to webroot failed");
+#ifdef MHD_USE_INTERNAL_POLLING_THREAD
+  flags |= MHD_USE_INTERNAL_POLLING_THREAD;
+#endif
 
-  if (argc == 2)
-  { 
-    port_nr = atoi(argv[1]);
+  if (argc > 3 || (argc >= 2 && (strcmp (argv[1], "-h") == 0 || strcmp (argv[1], "--help") == 0)))
+  {
+    fprintf (stderr, "Usage: %s [port] [listen address]\n"
+                     "  port            TCP port (default 8080)\n"
+                     "  listen address  IPv4 address to listen on (default: all), e.g. 127.0.0.1\n", argv[0]);
+    return 1;
   }
-  else
-  { 
-    port_nr = 8080;
-  }
-    
-      /* TODO check if this is truly necessary -  disallow usage of the blocking /dev/random */
-      /* gcry_control(GCRYCTL_ENABLE_QUICK_RANDOM, 0); */
-      TLS_daemon =
-        MHD_start_daemon (MHD_USE_THREAD_PER_CONNECTION,
-				port_nr, 
-				NULL, 
-				NULL, 
-				&http_ahc,
-                          	NULL,
-				MHD_OPTION_CONNECTION_TIMEOUT, 
-				256,
-                          	MHD_OPTION_END);
-
-  if (TLS_daemon == NULL)
+  if (argc >= 2)
+  {
+    port_nr = atoi (argv[1]);
+    if (port_nr < 1 || port_nr > 65535)
     {
-      fprintf (stderr, "Error: failed to start TLS_daemon\n");
+      fprintf (stderr, "Error: invalid port '%s'\n", argv[1]);
       return 1;
     }
-  else
-    {
-      printf ("MHD daemon listening on port %d\n", port_nr);
-    }
-
-
-  for(;;)
-  {
-    sleep(62);
   }
-  (void) getc (stdin);
-  MHD_stop_daemon (TLS_daemon);
+  if (argc == 3)
+    address = argv[2];
+
+  if (chdir (WEB_ROOT) != 0)
+  {
+    perror ("chdir() to webroot failed");
+    return 1;
+  }
+
+  memset (&addr, 0, sizeof (addr));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons ((unsigned short) port_nr);
+  addr.sin_addr.s_addr = htonl (INADDR_ANY);
+  if (address != NULL && inet_pton (AF_INET, address, &addr.sin_addr) != 1)
+  {
+    fprintf (stderr, "Error: invalid IPv4 listen address '%s'\n", address);
+    return 1;
+  }
+
+  http_daemon = MHD_start_daemon (flags, (unsigned short) port_nr, NULL, NULL,
+                                  &http_ahc, NULL,
+                                  MHD_OPTION_SOCK_ADDR, (struct sockaddr *) &addr,
+                                  MHD_OPTION_CONNECTION_TIMEOUT, (unsigned int) 256,
+                                  MHD_OPTION_END);
+  if (http_daemon == NULL)
+    {
+      fprintf (stderr, "Error: failed to start the HTTP daemon on port %d\n", port_nr);
+      return 1;
+    }
+  printf ("MHD daemon listening on %s port %d\n", address != NULL ? address : "all addresses", port_nr);
+  fflush (stdout);
+
+  for (;;)
+    sleep (62);
+
+  MHD_stop_daemon (http_daemon);
   return 0;
 }

@@ -6,7 +6,6 @@ navtexreceiver_LDFLAGS =  -pthread
 #pkgdata_DATA = Navtex.db
 
 navtexdir = /opt/Navtex/
-navtex_DATA = Navtex.db
 
 AM_CPPFLAGS = -DDATA_FILE=\"/opt/Navtex/Navtex.db\"
 
@@ -21,8 +20,20 @@ Navtex.db:
 	@echo "Generating empty SQLite database..."
 	./generate_db.sh
 
-# Ensure the database is generated before installation
+# Install the database only when there is none: reinstalling must not wipe
+# the stored messages and the configuration. The directory and the database
+# belong to the user who ran "sudo make install" (or to root), not to everyone.
 install-data-hook: all-local
-	@chmod 666 $(navtexdir)/Navtex.db
-	@chmod 777 $(navtexdir)
+	$(MKDIR_P) $(DESTDIR)$(navtexdir)
+	@if [ -f $(DESTDIR)$(navtexdir)/Navtex.db ]; then \
+	  echo "Keeping the existing $(DESTDIR)$(navtexdir)/Navtex.db"; \
+	else \
+	  $(INSTALL_DATA) Navtex.db $(DESTDIR)$(navtexdir)/Navtex.db; \
+	fi
+	@chmod 775 $(DESTDIR)$(navtexdir)
+	@chmod 664 $(DESTDIR)$(navtexdir)/Navtex.db
+	@if [ -n "$$SUDO_USER" ] && [ -z "$(DESTDIR)" ]; then \
+	  chown "$$SUDO_USER" $(navtexdir) $(navtexdir)/Navtex.db; \
+	fi
 
+CLEANFILES = Navtex.db

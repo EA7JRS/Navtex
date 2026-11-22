@@ -9,6 +9,7 @@
 #include <regex.h>
 #include <time.h>
 #include <sys/wait.h>
+#include <signal.h>
 #include "sdrplay_api.h"
 #include "sdrplay_api_dev.h"
 #include "message_store.h"
@@ -43,6 +44,22 @@ void init_fir2_wrapper();
 
 
 short debug_mode;
+
+// Set by SIGINT/SIGTERM: stop streaming and release the receiver cleanly.
+static volatile sig_atomic_t stop_requested = 0;
+// Set when the receiver is unplugged or stops delivering samples.
+static volatile sig_atomic_t device_lost = 0;
+// The capture thread ended because it was asked to (exit code 0) or not (1).
+static int capture_failed = 1;
+
+// Seconds without new samples before the receiver is considered lost.
+#define STREAM_TIMEOUT_S 15
+
+static void on_stop_signal(int sig)
+{
+    (void) sig;
+    stop_requested = 1;
+}
 
 int in_sample_rate =  (int)(IN_SAMPLE_RATE);
 int wav_sample_rate = (int)(IN_SAMPLE_RATE);
@@ -210,6 +227,7 @@ void EventCallback(sdrplay_api_EventT eventId, sdrplay_api_TunerSelectT tuner, s
 
     case sdrplay_api_DeviceRemoved:
         printf("sdrplay_api_EventCb: %s\n", "sdrplay_api_DeviceRemoved");
+        device_lost = 1;
         break;
 
     default:
@@ -479,14 +497,28 @@ void *captureIQ(void *prt)
 
  	    /////// MAIN CONSUMER LOOP ///////
             int go_on=1;
+            int last_in_idx = in_idx;
+            time_t last_sample_time = time(NULL);
 	    if(debug_mode) { PrepWav(); }
 
-	    while(go_on)
+	    while(go_on && !stop_requested && !device_lost)
 	    {
 		usleep(50000);
     		pthread_mutex_lock(&in_mutex);
 	  	c_in_idx = in_idx;
     		pthread_mutex_unlock(&in_mutex);
+
+                // Watchdog: the stream callback must keep moving in_idx
+                if (c_in_idx != last_in_idx)
+                {
+                    last_in_idx = c_in_idx;
+                    last_sample_time = time(NULL);
+                }
+                else if (time(NULL) - last_sample_time > STREAM_TIMEOUT_S)
+                {
+                    printf("No samples from the receiver for %d s - giving up\n", STREAM_TIMEOUT_S);
+                    device_lost = 1;
+                }
 
 
            	while(out_idx != c_in_idx)
@@ -529,7 +561,12 @@ void *captureIQ(void *prt)
 
 
 
-            // Release device (make it available to other applications)
+            if(debug_mode && go_on) { EndWav(); }
+            capture_failed = device_lost ? 1 : 0;
+            if (stop_requested) printf("Stop requested - releasing the receiver\n");
+
+            // Stop streaming, then release the device (make it available to other applications)
+            if (!device_lost) sdrplay_api_Uninit(chosenDevice->dev);
             sdrplay_api_ReleaseDevice(chosenDevice);
    	    free(sample_buffer);  
         }
@@ -561,12 +598,15 @@ int main(int argc, char *argv[])
 
  char *pvalue = NULL;
  int index;
- char c;
+ int c;
 
   opterr = 0;
   debug_mode=0;
 
-  while ((c = getopt (argc, argv, "bp:")) != (char)-1) {
+  // line-buffered output, so the messages reach the journal as they happen
+  setvbuf(stdout, NULL, _IOLBF, 0);
+
+  while ((c = getopt (argc, argv, "bdp:")) != -1) {
     switch (c)
       {
       case 'b':
@@ -613,13 +653,20 @@ int main(int argc, char *argv[])
 
 
 
+   signal(SIGINT, on_stop_signal);
+   signal(SIGTERM, on_stop_signal);
+
    pthread_create( &thread2, (pthread_attr_t *)NULL, captureIQ, (void *) NULL ); 
 
-   while(1)
+   // The capture thread only returns when it is asked to stop, when the
+   // receiver cannot be opened or when it is lost. Exit instead of staying
+   // alive without receiving: a service manager can then restart us.
+   pthread_join(thread2, NULL);
+   if (capture_failed && !stop_requested)
    {
-	sleep(61);
+	printf("Receiver not available - exiting\n");
+	return 1;
    }
-
    return 0;
 }
 

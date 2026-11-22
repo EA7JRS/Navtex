@@ -10,5 +10,8 @@ AM_CPPFLAGS =  -DDATA_FILE=\"/opt/Navtex/Navtex.db\"  -DWEB_ROOT=\"/opt/Navtex/b
 
 EXTRA_DIST = build
 
+# Replace the installed GUI instead of nesting build/build on a reinstall
 install-data-hook: 
-	@cp -r  build $(navtexdir)/build
+	$(MKDIR_P) $(DESTDIR)$(navtexdir)
+	@rm -rf $(DESTDIR)$(navtexdir)/build
+	@cp -r $(srcdir)/build $(DESTDIR)$(navtexdir)/build

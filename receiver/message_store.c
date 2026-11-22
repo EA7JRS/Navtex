@@ -1,9 +1,11 @@
-#define _XOPEN_SOURCE    
+#define _XOPEN_SOURCE 700
+#define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <cjson/cJSON.h>
 #include <sqlite3.h>
 #include <time.h>
+#include <stdlib.h>
 #include "message_store.h"
 
 extern char* strdup(const char*);
@@ -15,9 +17,10 @@ extern char* strdup(const char*);
 
 
 
+// Timestamps are stored in UTC. timegm() converts without looking at the
+// local time zone (the previous mktime()-timezone was one hour off during DST).
 time_t my_timegm(struct tm *tm) {
-    time_t t = mktime(tm);       // mktime assumes the input is in local time
-    return t - timezone;         // Adjust for timezone offset to get UTC time
+    return timegm(tm);
 } 
 
 void get_current_timestamp(char *cts)
@@ -51,8 +54,33 @@ long calculate_time_difference(char *timestamp) {
 }
 
 
+// The receiver and the web server share the database: wait instead of failing
+// when the other process holds the lock. *db is NULL when it cannot be opened.
 void open_db(sqlite3 **db) {
-        sqlite3_open(DATA_FILE, db);
+        if (sqlite3_open(DATA_FILE, db) != SQLITE_OK) {
+                fprintf(stderr, "Cannot open %s: %s\n", DATA_FILE, *db ? sqlite3_errmsg(*db) : "out of memory");
+                sqlite3_close(*db);
+                *db = NULL;
+                return;
+        }
+        sqlite3_busy_timeout(*db, 5000);
+}
+
+// Only these settings exist, and their values are lists of NAVTEX B1/B2 letters.
+static int valid_config(const char *tag, const char *value) {
+        static const char *tags[] = { "stations518", "messages518", "stations490", "messages490" };
+        size_t i, n;
+        int known = 0;
+
+        if (tag == NULL || value == NULL) return 0;
+        for (i = 0; i < sizeof(tags) / sizeof(tags[0]); i++)
+                if (strcmp(tag, tags[i]) == 0) known = 1;
+        if (!known) return 0;
+        n = strlen(value);
+        if (n > 26) return 0;
+        for (i = 0; i < n; i++)
+                if (value[i] < 'A' || value[i] > 'Z') return 0;
+        return 1;
 }
 
 
@@ -209,7 +237,8 @@ sqlite3_close(db);
 
 
 char *json_str = cJSON_Print(json);
-char *result = strdup(json_str); 
+char *result = json_str ? strdup(json_str) : NULL;
+cJSON_free(json_str);
 cJSON_Delete(json);
 return result;
 }
@@ -265,47 +294,40 @@ return;
 
 
 char *get_message_text(unsigned int m_id) {
-// create a cJSON object
-cJSON *json = cJSON_CreateObject();
-
-
-        char sql_str[80];
+        cJSON *json;
         sqlite3 *db;
-
         sqlite3_stmt *stmt;
-        open_db(&db);
+        char *json_str, *result;
 
+        open_db(&db);
         if (db == NULL)
         {
                 printf("Failed to open DB\n");
                 return ((char *) 0);
         }
-	sprintf(sql_str,"select message from messages where id=%u",m_id);
-        sqlite3_prepare_v2(db, sql_str, -1, &stmt, NULL);
+        json = cJSON_CreateObject();
 
-        if (sqlite3_step(stmt) == SQLITE_ROW) {
-		cJSON_AddStringToObject(json, sqlite3_column_name(stmt,0), (const char *) sqlite3_column_text(stmt, 0));
+        if (sqlite3_prepare_v2(db, "select message from messages where id = ?1", -1, &stmt, NULL) == SQLITE_OK) {
+                sqlite3_bind_int64(stmt, 1, (sqlite3_int64) m_id);
+                if (sqlite3_step(stmt) == SQLITE_ROW && sqlite3_column_text(stmt, 0) != NULL) {
+                        cJSON_AddStringToObject(json, "message", (const char *) sqlite3_column_text(stmt, 0));
+                }
+                sqlite3_finalize(stmt);
         }
 
-        sqlite3_finalize(stmt);
+        // reading a message marks it as seen
+        if (sqlite3_prepare_v2(db, "update messages set age='' where id = ?1", -1, &stmt, NULL) == SQLITE_OK) {
+                sqlite3_bind_int64(stmt, 1, (sqlite3_int64) m_id);
+                sqlite3_step(stmt);
+                sqlite3_finalize(stmt);
+        }
+        sqlite3_close(db);
 
-
-	sprintf(sql_str,"update messages set age='' where id=%u",m_id);
-        sqlite3_prepare_v2(db, sql_str, -1, &stmt, NULL);
-        sqlite3_step(stmt);
-
-        sqlite3_finalize(stmt);
-
-
-sqlite3_close(db);
-
-
-
-
-char *json_str = cJSON_Print(json);
-char *result = strdup(json_str); 
-cJSON_Delete(json);
-return result;
+        json_str = cJSON_Print(json);
+        result = json_str ? strdup(json_str) : NULL;
+        cJSON_free(json_str);
+        cJSON_Delete(json);
+        return result;
 }
 
 
@@ -362,41 +384,36 @@ sqlite3_close(db);
 
 
 char *json_str = cJSON_Print(json);
-char *result = strdup(json_str); // Allocate a new copy
+char *result = json_str ? strdup(json_str) : NULL;
+cJSON_free(json_str);
 cJSON_Delete(json);
 return result;
 }
 
 
-char *update_config(char* tag,char* value) {
-char sql_statement[200];
-cJSON *json = cJSON_CreateArray();
-
+// Returns 0 when the setting has been saved, -1 when the tag or the value are
+// not acceptable and -2 on a database error.
+int update_config(char* tag,char* value) {
         sqlite3 *db;
         sqlite3_stmt *stmt;
-        open_db(&db);
+        int rc;
 
+        if (!valid_config(tag, value)) return -1;
+
+        open_db(&db);
         if (db == NULL)
         {
                 printf("Failed to open DB\n");
-                return ((char *) 0);
+                return -2;
         }
-        sprintf(sql_statement,"update config set value='%s' where tag='%s' ", value, tag);
-
-        sqlite3_prepare_v2(db, sql_statement, -1, &stmt, NULL);
-
-        sqlite3_step(stmt);
-
+        if (sqlite3_prepare_v2(db, "update config set value = ?1 where tag = ?2", -1, &stmt, NULL) != SQLITE_OK) {
+                sqlite3_close(db);
+                return -2;
+        }
+        sqlite3_bind_text(stmt, 1, value, -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 2, tag, -1, SQLITE_STATIC);
+        rc = sqlite3_step(stmt);
         sqlite3_finalize(stmt);
-
-	sqlite3_close(db);
-
-
-
-char *json_str = cJSON_Print(json);
-char *result = strdup(json_str); 
-cJSON_Delete(json);
-return result;
+        sqlite3_close(db);
+        return rc == SQLITE_DONE ? 0 : -2;
 }
-
-
