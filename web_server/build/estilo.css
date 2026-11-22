@@ -69,6 +69,28 @@
     --info-fondo: #1e2c38;
   }
 }
+/* Noche: rojo sobre negro, para no perder la visión nocturna */
+:root[data-tema="noche"] {
+  --fondo: #000000;
+  --panel: #0d0303;
+  --borde: #3a1111;
+  --texto: #ff6b6b;
+  --suave: #9c4d4d;
+  --acento: #ff4242;
+  --acento-fondo: #2a0909;
+  --ok: #ff6b6b;
+  --mal: #ff2a2a;
+  --aviso: #ff6b6b;
+  --aviso-fondo: #1c0606;
+  --rojo: #ff4242;
+  --rojo-fondo: #2a0909;
+  --naranja: #e05555;
+  --naranja-fondo: #1c0606;
+  --amarillo: #c95050;
+  --amarillo-fondo: #160505;
+  --info-fondo: #140404;
+  color-scheme: dark;
+}
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
@@ -95,7 +117,29 @@ h1 { margin: 0; font-size: 20px; line-height: 1.2; }
 h2 { margin: 0 0 8px; font-size: 18px; }
 .sub { margin: 0; color: var(--suave); font-size: 13px; }
 .pestanas { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.tema select { width: auto; border-radius: 999px; color: var(--suave); }
+/* Selector de aspecto (botón con menú, como en la WebUI del tracker APRS LoRa+) y de idioma */
+.ajustes-vista { display: flex; gap: 6px; align-items: center; margin-left: 4px; }
+.boton-icono {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 40px; padding: 0 10px;
+  font: 700 13px/1 var(--mono); color: var(--suave); background: var(--panel); border: 1px solid var(--borde); border-radius: 999px; cursor: pointer;
+}
+.boton-icono:hover { color: var(--texto); border-color: var(--acento); }
+.boton-icono:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+.boton-icono svg { display: block; }
+.tema-elegir { position: relative; }
+.tema-menu {
+  display: none; position: absolute; right: 0; top: calc(100% + 8px); min-width: 15rem; z-index: 40;
+  background: var(--panel); border: 1px solid var(--borde); border-radius: 10px; padding: 5px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.tema-menu.abierto { display: block; }
+.tema-menu button {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 9px; width: 100%; min-height: 40px; padding: 7px 10px;
+  font: inherit; font-size: 15px; color: var(--texto); text-align: left; background: transparent; border: 0; border-radius: 7px; cursor: pointer;
+}
+.tema-menu button small { flex-basis: 100%; margin: -3px 0 0 25px; color: var(--suave); font-size: 12px; }
+.tema-menu button:hover { background: var(--info-fondo); }
+.tema-menu button.elegido { background: var(--acento-fondo); box-shadow: inset 3px 0 0 var(--acento); }
+.tema-menu .ti { display: inline-flex; width: 16px; }
 .pestana, .chip, .boton, .letra {
   font: inherit; color: var(--texto); background: var(--panel); border: 1px solid var(--borde);
   border-radius: 999px; padding: 8px 14px; cursor: pointer; min-height: 40px;

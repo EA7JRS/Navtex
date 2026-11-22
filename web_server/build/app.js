@@ -8,13 +8,14 @@
  */
 (function () {
   'use strict';
+  var I18N = window.NAVTEX_I18N, tr = I18N.tr;   // idioma de la interfaz (i18n.js)
 
   // Temas (segunda letra de la cabecera, B2)
   var TEMAS = {
-    A: 'Aviso a los navegantes', B: 'Aviso meteorológico', C: 'Hielos', D: 'Búsqueda y salvamento',
-    E: 'Previsión meteorológica', F: 'Practicaje', G: 'AIS', H: 'LORAN', I: 'Reservado', J: 'Navegación por satélite',
-    K: 'Otras ayudas electrónicas', L: 'Aviso a los navegantes (adicional)', T: 'Prueba', V: 'Servicio especial',
-    W: 'Servicio especial', X: 'Servicio especial', Y: 'Servicio especial', Z: 'Sin mensajes'
+    A: tr('Aviso a los navegantes'), B: tr('Aviso meteorológico'), C: tr('Hielos'), D: tr('Búsqueda y salvamento'),
+    E: tr('Previsión meteorológica'), F: tr('Practicaje'), G: 'AIS', H: 'LORAN', I: tr('Reservado'), J: tr('Navegación por satélite'),
+    K: tr('Otras ayudas electrónicas'), L: tr('Aviso a los navegantes (adicional)'), T: tr('Prueba'), V: tr('Servicio especial'),
+    W: tr('Servicio especial'), X: tr('Servicio especial'), Y: tr('Servicio especial'), Z: tr('Sin mensajes')
   };
   var GRAVEDAD = { D: 'rojo', B: 'naranja', A: 'amarillo', L: 'amarillo' };
   var OBLIGATORIOS = 'ABDL';
@@ -22,9 +23,9 @@
   var TEMAS_AJUSTE = 'ABCDEFGHJKLVWXYZ'.split('');
   var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   var BANDAS = [
-    { f: 518, nombre: '518 kHz · internacional, en inglés' },
-    { f: 490, nombre: '490 kHz · nacional, en el idioma del país' },
-    { f: 4209, nombre: '4209,5 kHz · onda corta' }
+    { f: 518, nombre: tr('518 kHz · internacional, en inglés') },
+    { f: 490, nombre: tr('490 kHz · nacional, en el idioma del país') },
+    { f: 4209, nombre: tr('4209,5 kHz · onda corta') }
   ];
   var IDIOMAS = {
     English: 'inglés', Spanish: 'español', French: 'francés', Portuguese: 'portugués', Italian: 'italiano', German: 'alemán',
@@ -44,6 +45,7 @@
   var verTodas = {};            // frecuencia -> true: lista completa de estaciones
   var estado = null;
   var gps = null;               // /api/gps
+  var repintarAspecto = function () {};   // la posición decide el aspecto automático
   var posPintada = null;        // posición con la que se pintaron las listas
 
   function $(id) { return document.getElementById(id); }
@@ -55,17 +57,17 @@
   }
   function dos(n) { return (n < 10 ? '0' : '') + n; }
   // 4209 es el canal de onda corta, 4209,5 kHz
-  function nombreFreq(f) { return (f === 4209 ? '4209,5' : String(f)) + ' kHz'; }
+  function nombreFreq(f) { return (f === 4209 ? tr('4209,5') : String(f)) + ' kHz'; }
   function pedir(ruta) {
     return fetch(ruta, { cache: 'no-store' }).then(function (r) {
-      if (!r.ok) throw new Error('el servidor respondió ' + r.status);
+      if (!r.ok) throw new Error(tr('el servidor respondió ') + r.status);
       return r.json();
     });
   }
   // Los cambios van con POST y una cabecera propia: otra página web no puede hacerlos
   function enviar(ruta) {
     return fetch(ruta, { method: 'POST', cache: 'no-store', headers: { 'X-Navtex': '1' } }).then(function (r) {
-      if (!r.ok) throw new Error('el servidor respondió ' + r.status);
+      if (!r.ok) throw new Error(tr('el servidor respondió ') + r.status);
     });
   }
   function avisar(id, bien, texto) {
@@ -79,14 +81,14 @@
   function haceCuanto(ms, ahora) {
     var s = Math.round((ahora - ms) / 1000);
     if (!isFinite(s)) return '—';
-    if (s < 90) return 'ahora mismo';
-    if (s < 3600) return 'hace ' + Math.round(s / 60) + ' min';
-    if (s < 36 * 3600) return 'hace ' + Math.round(s / 3600) + ' h';
-    return 'hace ' + Math.round(s / 86400) + ' días';
+    if (s < 90) return tr('ahora mismo');
+    if (s < 3600) return tr('hace {n} min').replace('{n}', Math.round(s / 60));
+    if (s < 36 * 3600) return tr('hace {n} h').replace('{n}', Math.round(s / 3600));
+    return tr('hace {n} días').replace('{n}', Math.round(s / 86400));
   }
   function fechaUtc(ms) {
     var d = new Date(ms);
-    return d.getUTCDate() + ' ' + MESES[d.getUTCMonth()] + ' ' + dos(d.getUTCHours()) + ':' + dos(d.getUTCMinutes()) + ' UTC';
+    return d.getUTCDate() + ' ' + tr(MESES[d.getUTCMonth()]) + ' ' + dos(d.getUTCHours()) + ':' + dos(d.getUTCMinutes()) + ' UTC';
   }
   function horaLocal(ms) {
     var d = new Date(ms);
@@ -145,7 +147,7 @@
     var gs = String(g); while (gs.length < ancho) gs = '0' + gs;
     return gs + '° ' + (m < 10 ? '0' : '') + m.toFixed(2).replace('.', ',') + "' " + (v >= 0 ? positivo : negativo);
   }
-  function enCarta(p) { return gradosMinutos(p.lat, 'N', 'S', 2) + '  ' + gradosMinutos(p.lon, 'E', 'O', 3); }
+  function enCarta(p) { return gradosMinutos(p.lat, 'N', 'S', 2) + '  ' + gradosMinutos(p.lon, 'E', I18N.idioma === 'en' ? 'W' : 'O', 3); }
   // "36.53, -6.29" o un localizador Maidenhead de 4, 6 u 8 caracteres
   function leerPosicion(texto) {
     var t = String(texto).trim();
@@ -201,12 +203,12 @@
     var vivo = Date.parse(estado[p + 'receiver_alive'] || '');
     var fresco = isFinite(vivo) && ahora - vivo < 3 * 60000;
     var origen = estado[p + 'source'] === 'rtlsdr' ? 'RTL-SDR' : estado[p + 'source'] === 'sdrplay' ? 'SDRplay' : '';
-    var banda = estado[p + 'band'] === 'hf' ? '4209,5 kHz' : '518 y 490 kHz';
-    if (st === 'off') return { ok: null, texto: 'Apagado', detalle: 'se enciende en Receptores' };
-    if (st === 'receiving' && fresco) return { ok: true, texto: 'Recibiendo', detalle: banda + (origen ? ' · ' + origen : '') };
-    if (st === 'starting' || (st === 'receiving' && !fresco && isFinite(vivo) && ahora - vivo < 6 * 60000)) return { ok: null, texto: 'Arrancando', detalle: banda + (origen ? ' · ' + origen : '') };
-    if (st === 'unavailable') return { ok: false, texto: 'Sin equipo', detalle: (origen || 'equipo') + ' desconectado o en uso' };
-    return { ok: false, texto: 'Parado', detalle: st === '' ? 'el servicio no ha arrancado' : 'el servicio está parado' };
+    var banda = estado[p + 'band'] === 'hf' ? tr('4209,5 kHz') : tr('518 y 490 kHz');
+    if (st === 'off') return { ok: null, texto: tr('Apagado'), detalle: tr('se enciende en Receptores') };
+    if (st === 'receiving' && fresco) return { ok: true, texto: tr('Recibiendo'), detalle: banda + (origen ? ' · ' + origen : '') };
+    if (st === 'starting' || (st === 'receiving' && !fresco && isFinite(vivo) && ahora - vivo < 6 * 60000)) return { ok: null, texto: tr('Arrancando'), detalle: banda + (origen ? ' · ' + origen : '') };
+    if (st === 'unavailable') return { ok: false, texto: tr('Sin equipo'), detalle: (origen || tr('equipo')) + tr(' desconectado o en uso') };
+    return { ok: false, texto: tr('Parado'), detalle: st === '' ? tr('el servicio no ha arrancado') : tr('el servicio está parado') };
   }
   function dato(id, etiqueta) {
     var d = crear('div', 'dato');
@@ -218,13 +220,13 @@
   function montarEstado() {
     var raiz = $('estado');
     raiz.textContent = '';
-    raiz.appendChild(dato('rx1', 'Receptor 1'));
-    raiz.appendChild(dato('rx2', 'Receptor 2'));
-    raiz.appendChild(dato('sinc-518', '518 kHz · internacional'));
-    raiz.appendChild(dato('sinc-490', '490 kHz · nacional'));
-    raiz.appendChild(dato('sinc-4209', '4209,5 kHz · onda corta'));
-    raiz.appendChild(dato('hora-utc', 'Hora UTC'));
-    raiz.appendChild(dato('gps', 'Posición GPS'));
+    raiz.appendChild(dato('rx1', tr('Receptor 1')));
+    raiz.appendChild(dato('rx2', tr('Receptor 2')));
+    raiz.appendChild(dato('sinc-518', tr('518 kHz · internacional')));
+    raiz.appendChild(dato('sinc-490', tr('490 kHz · nacional')));
+    raiz.appendChild(dato('sinc-4209', tr('4209,5 kHz · onda corta')));
+    raiz.appendChild(dato('hora-utc', tr('Hora UTC')));
+    raiz.appendChild(dato('gps', tr('Posición GPS')));
     $('gps').className = 'valor mono gps';
     $('hora-utc').className = 'valor mono';
   }
@@ -246,11 +248,11 @@
     });
     ['518', '490', '4209'].forEach(function (f) {
       var t = Date.parse(estado['phasing_' + f] || '');
-      $('sinc-' + f).textContent = isFinite(t) ? haceCuanto(t, ahora) : 'todavía ninguno';
-      $('sinc-' + f + '-detalle').textContent = 'último sincronismo';
+      $('sinc-' + f).textContent = isFinite(t) ? haceCuanto(t, ahora) : tr('todavía ninguno');
+      $('sinc-' + f + '-detalle').textContent = tr('último sincronismo');
     });
     if (typeof estado.version === 'string') $('version').textContent = 'v' + estado.version;
-    $('hora-utc-detalle').textContent = (estado.messages || 0) + (estado.messages === 1 ? ' mensaje guardado' : ' mensajes guardados');
+    $('hora-utc-detalle').textContent = (estado.messages || 0) + (estado.messages === 1 ? tr(' mensaje guardado') : tr(' mensajes guardados'));
   }
 
   // -------------------------------------------------------------- mensajes
@@ -273,7 +275,7 @@
     var actual = sel.value;
     while (sel.options.length > 1) sel.remove(1);
     letras.forEach(function (l) {
-      var o = crear('option', '', l + ' · ' + (TEMAS[l] || 'Tema ' + l));
+      var o = crear('option', '', l + ' · ' + (TEMAS[l] || tr('Tema ') + l));
       o.value = l;
       sel.appendChild(o);
     });
@@ -304,7 +306,7 @@
     return enviar('/api/messages/delete/' + id).then(leerTodo).catch(function (e) {
       var error = $('error-general');
       error.hidden = false;
-      error.textContent = 'No se pudo borrar: ' + e.message + '.';
+      error.textContent = tr('No se pudo borrar: ') + e.message + '.';
     });
   }
 
@@ -326,16 +328,16 @@
       boton.type = 'button';
       boton.setAttribute('aria-expanded', abiertos[m.id] ? 'true' : 'false');
       boton.appendChild(crear('span', 'cab mono ' + (GRAVEDAD[m.subject] || ''), m.bbbb));
-      var titulo = crear('span', 'titulo', TEMAS[m.subject] || 'Tema ' + m.subject);
-      if (m.unread) titulo.appendChild(crear('span', 'marca-nuevo', 'nuevo'));
+      var titulo = crear('span', 'titulo', TEMAS[m.subject] || tr('Tema ') + m.subject);
+      if (m.unread) titulo.appendChild(crear('span', 'marca-nuevo', tr('nuevo')));
       boton.appendChild(titulo);
       boton.appendChild(crear('span', 'flecha', '›'));
       var meta = crear('span', 'meta');
       var linea = primeraLinea(m.message);
       if (linea) meta.appendChild(crear('span', 'resumen-linea', linea));
-      meta.appendChild(document.createTextNode('estación ' + m.station + ' · ' + nombreFreq(m.freq) + ' · ' + haceCuanto(m.recibido, ahora) + ' (' + fechaUtc(m.recibido) + ')'));
-      if (!m.complete) { meta.appendChild(document.createTextNode(' · ')); meta.appendChild(crear('span', 'cortado', 'cortado')); }
-      else if (m.satisfactory === false) { meta.appendChild(document.createTextNode(' · ')); meta.appendChild(crear('span', 'cortado', 'con errores')); }
+      meta.appendChild(document.createTextNode(tr('estación ') + m.station + ' · ' + nombreFreq(m.freq) + ' · ' + haceCuanto(m.recibido, ahora) + ' (' + fechaUtc(m.recibido) + ')'));
+      if (!m.complete) { meta.appendChild(document.createTextNode(' · ')); meta.appendChild(crear('span', 'cortado', tr('cortado'))); }
+      else if (m.satisfactory === false) { meta.appendChild(document.createTextNode(' · ')); meta.appendChild(crear('span', 'cortado', tr('con errores'))); }
       boton.appendChild(meta);
       boton.addEventListener('click', function () { alternar(m); });
       li.appendChild(boton);
@@ -345,15 +347,15 @@
         var est = estacionDe(m);
         var oido = typeof m.heard === 'number' && m.heard * 1000 - m.recibido > 600000 ? m.heard * 1000 : 0;
         var malos = typeof m.errors === 'number' ? m.errors : 0;
-        var tasa = malos && m.characters ? (100 * malos / m.characters).toFixed(1).replace('.', ',') : '';
-        cuerpo.appendChild(crear('p', 'nota', 'Recibido el ' + fechaUtc(m.recibido) + ' (' + horaLocal(m.recibido) + ' hora local) en ' + nombreFreq(m.freq) + '.'
-          + (oido ? ' La estación lo sigue emitiendo: oído por última vez ' + haceCuanto(oido, ahora) + '.' : '')
-          + (est ? (est.porTurno ? ' Por la letra y la hora, lo emitió ' + est.nombre + '.' : ' La estación ' + m.station + ' más cercana en esa frecuencia es ' + est.nombre + '.') : '')
-          + (m.in_slot === false ? ' Llegó fuera del turno de la letra ' + m.station + ': puede ser una estación lejana con otro horario.' : '')
-          + (m.complete ? '' : ' La recepción se cortó antes del final del mensaje.')
-          + (malos ? ' ' + malos + (malos === 1 ? ' carácter no se pudo recibir bien (el asterisco): ' : ' caracteres no se pudieron recibir bien (los asteriscos): ') + tasa + ' %.' : '')
-          + (m.satisfactory === false && m.complete ? ' Con un 4 % o más de errores la recepción no se da por buena: si la estación lo repite mejor, la copia nueva sustituye a esta.' : '')));
-        var bb = crear('button', 'boton pequeno', 'Borrar este mensaje');
+        var tasa = malos && m.characters ? (100 * malos / m.characters).toFixed(1).replace('.', I18N.idioma === 'en' ? '.' : ',') : '';
+        cuerpo.appendChild(crear('p', 'nota', tr('Recibido el ') + fechaUtc(m.recibido) + ' (' + horaLocal(m.recibido) + tr(' hora local) en ') + nombreFreq(m.freq) + '.'
+          + (oido ? tr(' La estación lo sigue emitiendo: oído por última vez ') + haceCuanto(oido, ahora) + '.' : '')
+          + (est ? (est.porTurno ? tr(' Por la letra y la hora, lo emitió ') + est.nombre + '.' : tr(' La estación ') + m.station + tr(' más cercana en esa frecuencia es ') + est.nombre + '.') : '')
+          + (m.in_slot === false ? tr(' Llegó fuera del turno de la letra ') + m.station + tr(': puede ser una estación lejana con otro horario.') : '')
+          + (m.complete ? '' : tr(' La recepción se cortó antes del final del mensaje.'))
+          + (malos ? ' ' + malos + (malos === 1 ? tr(' carácter no se pudo recibir bien (el asterisco): ') : tr(' caracteres no se pudieron recibir bien (los asteriscos): ')) + tasa + ' %.' : '')
+          + (m.satisfactory === false && m.complete ? tr(' Con un 4 % o más de errores la recepción no se da por buena: si la estación lo repite mejor, la copia nueva sustituye a esta.') : '')));
+        var bb = crear('button', 'boton pequeno', tr('Borrar este mensaje'));
         bb.type = 'button'; bb.id = 'borrar-' + m.id;
         bb.addEventListener('click', function () { borrar(m.id); });
         cuerpo.appendChild(bb);
@@ -364,14 +366,14 @@
 
     var ocultos = mensajes.length - (filtro.todo || !configLeida ? mensajes.length : mensajes.filter(seSigue).length);
     $('resumen').textContent = mensajes.length === 0 ? ''
-      : ver.length + (ver.length === 1 ? ' mensaje' : ' mensajes')
-        + (ocultos > 0 ? ' · ' + ocultos + ' más de estaciones o temas que no sigue' : '');
+      : ver.length + (ver.length === 1 ? tr(' mensaje') : tr(' mensajes'))
+        + (ocultos > 0 ? ' · ' + ocultos + tr(' más de estaciones o temas que no sigue') : '');
     $('acciones-mensajes').hidden = mensajes.length === 0;
     var vacio = $('vacio');
     vacio.hidden = ver.length > 0;
     vacio.textContent = mensajes.length === 0
-      ? 'Todavía no se ha recibido ningún mensaje. Cada estación emite cada cuatro horas, en su turno de diez minutos.'
-      : 'Ningún mensaje con estos filtros.';
+      ? tr('Todavía no se ha recibido ningún mensaje. Cada estación emite cada cuatro horas, en su turno de diez minutos.')
+      : tr('Ningún mensaje con estos filtros.');
   }
 
   function alternar(m) {
@@ -392,9 +394,9 @@
     pintarProximas();
     pintarLista();
     enviar('/saveconfig/' + tag + '/' + valor).then(function () {
-      avisar('estado-ajustes', true, 'Guardado.');
+      avisar('estado-ajustes', true, tr('Guardado.'));
     }).catch(function (e) {
-      avisar('estado-ajustes', false, 'No se pudo guardar: ' + e.message + '.');
+      avisar('estado-ajustes', false, tr('No se pudo guardar: ') + e.message + '.');
       leerConfig();
     });
   }
@@ -409,7 +411,7 @@
     bt.type = 'button';
     if (id) bt.id = id;
     bt.setAttribute('aria-pressed', activa ? 'true' : 'false');
-    bt.setAttribute('aria-label', 'Estación ' + l + (activa ? ', seguida' : ', sin seguir'));
+    bt.setAttribute('aria-label', tr('Estación ') + l + (activa ? tr(', seguida') : tr(', sin seguir')));
     bt.addEventListener('click', function () { guardar(tag, conLetra(config[tag], l, !activa)); });
     return bt;
   }
@@ -429,9 +431,9 @@
       // Estaciones de la base de datos, por distancia
       var todas = conDistancia(b.f);
       var cerca = todas.filter(function (x, i) { return verTodas[f] || (hayPos ? i < 8 : false); });
-      t.appendChild(crear('h3', '', hayPos ? 'Estaciones, de la más cercana a la más lejana' : 'Estaciones'));
+      t.appendChild(crear('h3', '', hayPos ? tr('Estaciones, de la más cercana a la más lejana') : tr('Estaciones')));
       if (!hayPos && !verTodas[f]) {
-        t.appendChild(crear('p', 'nota', 'Indique su posición arriba para ver las más cercanas, o despliegue la lista completa.'));
+        t.appendChild(crear('p', 'nota', tr('Indique su posición arriba para ver las más cercanas, o despliegue la lista completa.')));
       }
       if (cerca.length) {
         var ul = crear('ul', 'estaciones');
@@ -440,22 +442,22 @@
           var li = crear('li');
           li.appendChild(botonLetra(b.f, tagE, e.letra));
           var nombre = crear('span', 'nombre', e.nombre);
-          if (x.enAlcance) nombre.appendChild(crear('span', 'etiq ok', 'en alcance'));
+          if (x.enAlcance) nombre.appendChild(crear('span', 'etiq ok', tr('en alcance')));
           if (e.estado !== 'activa') nombre.appendChild(crear('span', 'etiq no', e.estado));
           li.appendChild(nombre);
-          li.appendChild(crear('span', 'dist', x.d === null ? '' : Math.round(x.d) + ' mn'));
+          li.appendChild(crear('span', 'dist', x.d === null ? '' : Math.round(x.d) + tr(' mn')));
           var px = proxima(e, ahora);
           li.appendChild(crear('span', 'mas', e.pais
-            + (e.alcance !== null ? ' · alcance ' + e.alcance + ' mn' : '')
-            + (e.idioma ? ' · ' + (IDIOMAS[e.idioma] || e.idioma) : '')
-            + (px !== null ? ' · próxima ' + horaUtc(px) + ' UTC' : '')
+            + (e.alcance !== null ? tr(' · alcance ') + e.alcance + tr(' mn') : '')
+            + (e.idioma ? ' · ' + (IDIOMAS[e.idioma] ? tr(IDIOMAS[e.idioma]) : e.idioma) : '')
+            + (px !== null ? tr(' · próxima ') + horaUtc(px) + ' UTC' : '')
             + (e.nota ? ' · ' + e.nota : '')));
           ul.appendChild(li);
         });
         t.appendChild(ul);
       }
       var acc = crear('div', 'acciones');
-      var mas = crear('button', 'boton pequeno', verTodas[f] ? 'Ver solo las cercanas' : 'Ver las ' + todas.length + ' estaciones');
+      var mas = crear('button', 'boton pequeno', verTodas[f] ? tr('Ver solo las cercanas') : tr('Ver las {n} estaciones').replace('{n}', todas.length));
       mas.type = 'button';
       mas.id = 'ver-todas-' + f;
       mas.addEventListener('click', function () { verTodas[f] = !verTodas[f]; pintarAjustes(); });
@@ -465,7 +467,7 @@
         // En onda corta no hay alcance publicado: se ofrecen las tres más cercanas
         var propuesta = enAlc.length ? enAlc : (b.f === 4209 ? todas.filter(function (x) { return x.d !== null; }).slice(0, 3) : []);
         if (propuesta.length) {
-          var auto = crear('button', 'boton pequeno', enAlc.length ? 'Seguir solo las que están en alcance' : 'Seguir solo las tres más cercanas');
+          var auto = crear('button', 'boton pequeno', enAlc.length ? tr('Seguir solo las que están en alcance') : tr('Seguir solo las tres más cercanas'));
           auto.type = 'button';
           auto.id = 'seguir-alcance-' + f;
           auto.addEventListener('click', function () {
@@ -480,21 +482,21 @@
 
       // Todas las letras
       var det = crear('details');
-      det.appendChild(crear('summary', '', 'Elegir por letra (' + (config[tagE].split('').join(' ') || 'ninguna') + ')'));
+      det.appendChild(crear('summary', '', tr('Elegir por letra (') + (config[tagE].split('').join(' ') || tr('ninguna')) + ')'));
       var letras = crear('div', 'letras');
       LETRAS.forEach(function (l) { letras.appendChild(botonLetra(b.f, tagE, l, 'est-' + f + '-' + l)); });
       det.appendChild(letras);
       var acc2 = crear('div', 'acciones');
-      var tod = crear('button', 'boton pequeno', 'Todas'); tod.type = 'button';
+      var tod = crear('button', 'boton pequeno', tr('Todas')); tod.type = 'button';
       tod.addEventListener('click', function () { guardar(tagE, LETRAS.join('')); });
-      var nin = crear('button', 'boton pequeno', 'Ninguna'); nin.type = 'button';
+      var nin = crear('button', 'boton pequeno', tr('Ninguna')); nin.type = 'button';
       nin.addEventListener('click', function () { guardar(tagE, ''); });
       acc2.appendChild(tod); acc2.appendChild(nin);
       det.appendChild(acc2);
       t.appendChild(det);
 
       var dt = crear('details');
-      dt.appendChild(crear('summary', '', 'Temas'));
+      dt.appendChild(crear('summary', '', tr('Temas')));
       var temas = crear('div', 'temas');
       TEMAS_AJUSTE.forEach(function (l) {
         var fijo = OBLIGATORIOS.indexOf(l) >= 0;
@@ -507,7 +509,7 @@
         c.addEventListener('change', function () { guardar(tagT, conLetra(config[tagT], l, c.checked)); });
         lab.appendChild(c);
         lab.appendChild(crear('span', 'l', l));
-        lab.appendChild(crear('span', '', (TEMAS[l] || '') + (fijo ? ' · siempre' : '')));
+        lab.appendChild(crear('span', '', (TEMAS[l] || '') + (fijo ? tr(' · siempre') : '')));
         temas.appendChild(lab);
       });
       dt.appendChild(temas);
@@ -516,8 +518,8 @@
     });
 
     $('fuente-estaciones').textContent = fuentes.length
-      ? 'Datos de las estaciones: ' + fuentes.map(function (x) { return x.titulo + ' (' + x.nombre + ', ' + x.fecha + ')'; }).join('; ')
-        + '. Pueden haber cambiado: compruébelos con las publicaciones oficiales antes de fiarse de ellos.'
+      ? tr('Datos de las estaciones: ') + fuentes.map(function (x) { return tr(x.titulo) + ' (' + tr(x.nombre) + ', ' + x.fecha + ')'; }).join('; ')
+        + tr('. Pueden haber cambiado: compruébelos con las publicaciones oficiales antes de fiarse de ellos.')
       : '';
   }
 
@@ -542,15 +544,15 @@
     var ahora = Date.now();
     ol.textContent = '';
     if (posicion() === null) {
-      ol.appendChild(crear('li', 'nota', 'Indique su posición para ver el horario de las estaciones que sigue.'));
+      ol.appendChild(crear('li', 'nota', tr('Indique su posición para ver el horario de las estaciones que sigue.')));
       return;
     }
     var lista = seguidasConHora(ahora).slice(0, 8);
-    if (!lista.length) { ol.appendChild(crear('li', 'nota', 'No sigue ninguna estación con horario conocido.')); return; }
+    if (!lista.length) { ol.appendChild(crear('li', 'nota', tr('No sigue ninguna estación con horario conocido.'))); return; }
     lista.forEach(function (x) {
       var li = crear('li');
       li.appendChild(crear('span', 'hora', horaUtc(x.t)));
-      li.appendChild(document.createTextNode(x.e.nombre + ' (' + x.e.letra + ') · ' + nombreFreq(x.e.khz) + ' · en ' + Math.max(1, Math.round((x.t - ahora) / 60000)) + ' min'));
+      li.appendChild(document.createTextNode(x.e.nombre + ' (' + x.e.letra + ') · ' + nombreFreq(x.e.khz) + tr(' · en {n} min').replace('{n}', Math.max(1, Math.round((x.t - ahora) / 60000)))));
       ol.appendChild(li);
     });
   }
@@ -559,10 +561,10 @@
     if (!v) return;
     var p = posicionGps();
     if (!gps) { v.textContent = '—'; x.textContent = ''; return; }
-    if (!gps.enabled) { v.textContent = 'sin GPS'; x.textContent = 'no hay gpsd configurado'; return; }
-    if (!gps.connected) { v.textContent = 'sin GPS'; x.textContent = 'gpsd no contesta'; return; }
-    var sat = typeof gps.used === 'number' ? gps.used + ' de ' + gps.visible + ' satélites' : '';
-    if (!p) { v.textContent = 'sin posición'; x.textContent = 'buscando satélites' + (sat ? ' · ' + sat : ''); return; }
+    if (!gps.enabled) { v.textContent = tr('sin GPS'); x.textContent = tr('no hay gpsd configurado'); return; }
+    if (!gps.connected) { v.textContent = tr('sin GPS'); x.textContent = tr('gpsd no contesta'); return; }
+    var sat = typeof gps.used === 'number' ? tr('{a} de {b} satélites').replace('{a}', gps.used).replace('{b}', gps.visible) : '';
+    if (!p) { v.textContent = tr('sin posición'); x.textContent = tr('buscando satélites') + (sat ? ' · ' + sat : ''); return; }
     v.textContent = enCarta(p);
     x.textContent = localizador(p) + ' · ' + (gps.fix >= 3 ? '3D' : '2D') + (sat ? ' · ' + sat : '')
       + (typeof gps.alt === 'number' ? ' · ' + Math.round(gps.alt) + ' m' : '');
@@ -570,12 +572,13 @@
   function pintarPosicion() {
     var p = posicion(), g = posicionGps(), m = posicionManual();
     $('usar-gps').checked = usaGps();
+    if (p) { window.NAVTEX_TEMA.ponerPosicion(p.lat, p.lon); repintarAspecto(); }
     var texto;
-    if (usaGps() && g) texto = 'En uso: la del GPS, ' + enCarta(g) + ' (' + localizador(g) + ').';
-    else if (usaGps() && m) texto = 'El GPS no da posición ahora: se usa la escrita, ' + m.lat.toFixed(3) + ', ' + m.lon.toFixed(3) + ' (' + localizador(m) + ').';
-    else if (usaGps()) texto = 'El GPS no da posición ahora y no hay ninguna escrita.';
-    else if (m) texto = 'En uso: la escrita, ' + m.lat.toFixed(3) + ', ' + m.lon.toFixed(3) + ' (' + localizador(m) + ').';
-    else texto = 'Sin posición.';
+    if (usaGps() && g) texto = tr('En uso: la del GPS, ') + enCarta(g) + ' (' + localizador(g) + ').';
+    else if (usaGps() && m) texto = tr('El GPS no da posición ahora: se usa la escrita, ') + m.lat.toFixed(3) + ', ' + m.lon.toFixed(3) + ' (' + localizador(m) + ').';
+    else if (usaGps()) texto = tr('El GPS no da posición ahora y no hay ninguna escrita.');
+    else if (m) texto = tr('En uso: la escrita, ') + m.lat.toFixed(3) + ', ' + m.lon.toFixed(3) + ' (' + localizador(m) + ').';
+    else texto = tr('Sin posición.');
     $('posicion-actual').textContent = texto;
     posPintada = p;
   }
@@ -598,9 +601,9 @@
   function ponerAjuste(clave, valor) {
     ajustes[clave] = valor;
     return enviar('/api/settings/' + clave + '/' + encodeURIComponent(valor)).then(function () {
-      avisar('estado-receptores', true, 'Guardado. El receptor lo aplica en unos segundos.');
+      avisar('estado-receptores', true, tr('Guardado. El receptor lo aplica en unos segundos.'));
     }).catch(function (e) {
-      avisar('estado-receptores', false, 'No se pudo guardar: ' + e.message + '.');
+      avisar('estado-receptores', false, tr('No se pudo guardar: ') + e.message + '.');
       return leerAjustes();
     });
   }
@@ -634,19 +637,19 @@
       var banda = v('band', 'mf');
       var t = crear('div', 'tarjeta');
       t.id = 'receptor-' + n;
-      t.appendChild(crear('h2', '', 'Receptor ' + n));
+      t.appendChild(crear('h2', '', tr('Receptor ') + n));
       var est = crear('p', 'nota estado-rx'); est.id = 'estado-rx' + n; t.appendChild(est);
 
       var enc = crear('label', 'interruptor');
       var c = crear('input'); c.type = 'checkbox'; c.id = 'rx' + n + '-enabled'; c.checked = v('enabled', '0') === '1';
       c.addEventListener('change', function () { ponerAjuste(p + 'enabled', c.checked ? '1' : '0'); });
-      enc.appendChild(c); enc.appendChild(document.createTextNode('Encendido'));
+      enc.appendChild(c); enc.appendChild(document.createTextNode(tr('Encendido')));
       t.appendChild(enc);
 
       var r1 = crear('div', 'rejilla');
-      r1.appendChild(campo('Equipo', selector('rx' + n + '-source', [['sdrplay', 'SDRplay'], ['rtlsdr', 'RTL-SDR']], equipo,
+      r1.appendChild(campo(tr('Equipo'), selector('rx' + n + '-source', [['sdrplay', 'SDRplay'], ['rtlsdr', 'RTL-SDR']], equipo,
         function (x) { ponerAjuste(p + 'source', x).then(pintarReceptores); })));
-      r1.appendChild(campo('Banda', selector('rx' + n + '-band', [['mf', '518 y 490 kHz'], ['hf', '4209,5 kHz (onda corta)'], ['auto', 'Por horario: las dos']], banda,
+      r1.appendChild(campo(tr('Banda'), selector('rx' + n + '-band', [['mf', tr('518 y 490 kHz')], ['hf', tr('4209,5 kHz (onda corta)')], ['auto', tr('Por horario: las dos')]], banda,
         function (x) { ponerAjuste(p + 'band', x).then(pintarReceptores); })));
       t.appendChild(r1);
 
@@ -655,8 +658,8 @@
           var limpio = x.replace(/[^0-9,]/g, '').split(',').filter(function (h) { return /^([01]\d|2[0-3])[0-5]\d$/.test(h); }).slice(0, 36).join(',');
           ponerAjuste(p + 'hf_slots', limpio).then(pintarReceptores);
         });
-        t.appendChild(campo('Horas UTC en onda corta (HHMM, separadas por comas)', hs));
-        var tomar = crear('button', 'boton pequeno', 'Tomar las horas de las estaciones de onda corta que sigo');
+        t.appendChild(campo(tr('Horas UTC en onda corta (HHMM, separadas por comas)'), hs));
+        var tomar = crear('button', 'boton pequeno', tr('Tomar las horas de las estaciones de onda corta que sigo'));
         tomar.type = 'button'; tomar.id = 'rx' + n + '-tomar';
         tomar.addEventListener('click', function () {
           var horas = {};
@@ -666,23 +669,23 @@
           ponerAjuste(p + 'hf_slots', Object.keys(horas).sort().slice(0, 36).join(',')).then(pintarReceptores);
         });
         t.appendChild(tomar);
-        t.appendChild(crear('p', 'nota', 'Escucha 518 y 490 kHz y pasa a 4209,5 kHz en cada hora indicada, desde un minuto antes hasta once después. Mientras está en onda corta no recibe las otras dos.'));
+        t.appendChild(crear('p', 'nota', tr('Escucha 518 y 490 kHz y pasa a 4209,5 kHz en cada hora indicada, desde un minuto antes hasta once después. Mientras está en onda corta no recibe las otras dos.')));
       }
 
       var r2 = crear('div', 'rejilla');
       if (equipo === 'sdrplay') {
-        r2.appendChild(campo('Toma de antena (RSPdx)', selector('rx' + n + '-port', [['A', 'A'], ['B', 'B'], ['C', 'C']], v('port', 'A'),
+        r2.appendChild(campo(tr('Toma de antena (RSPdx)'), selector('rx' + n + '-port', [['A', 'A'], ['B', 'B'], ['C', 'C']], v('port', 'A'),
           function (x) { ponerAjuste(p + 'port', x); })));
       } else {
-        r2.appendChild(campo('Número de serie (si hay varios)', texto('rx' + n + '-serial', v('serial', ''), 'cualquiera',
+        r2.appendChild(campo(tr('Número de serie (si hay varios)'), texto('rx' + n + '-serial', v('serial', ''), tr('cualquiera'),
           function (x) { ponerAjuste(p + 'serial', x.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32)).then(pintarReceptores); })));
-        r2.appendChild(campo('Muestreo directo', selector('rx' + n + '-direct', [['auto', 'Automático, según el modelo'], ['2', 'Rama Q'], ['1', 'Rama I'], ['0', 'Apagado (conversor)']], v('direct', 'auto'),
+        r2.appendChild(campo(tr('Muestreo directo'), selector('rx' + n + '-direct', [['auto', tr('Automático, según el modelo')], ['2', tr('Rama Q')], ['1', tr('Rama I')], ['0', tr('Apagado (conversor)')]], v('direct', 'auto'),
           function (x) { ponerAjuste(p + 'direct', x); })));
-        r2.appendChild(campo('Conversor externo (Hz; 0 = ninguno)', texto('rx' + n + '-upconv', v('upconv', '0'), '0',
+        r2.appendChild(campo(tr('Conversor externo (Hz; 0 = ninguno)'), texto('rx' + n + '-upconv', v('upconv', '0'), '0',
           function (x) { ponerAjuste(p + 'upconv', x.replace(/\D/g, '').slice(0, 10) || '0').then(pintarReceptores); })));
-        r2.appendChild(campo('Ganancia (dB, o auto)', texto('rx' + n + '-gain', v('gain', 'auto'), 'auto',
+        r2.appendChild(campo(tr('Ganancia (dB, o auto)'), texto('rx' + n + '-gain', v('gain', 'auto'), 'auto',
           function (x) { ponerAjuste(p + 'gain', /^\d{1,2}(\.\d)?$/.test(x) ? x : 'auto').then(pintarReceptores); })));
-        r2.appendChild(campo('Corrección (ppm)', texto('rx' + n + '-ppm', v('ppm', '0'), '0',
+        r2.appendChild(campo(tr('Corrección (ppm)'), texto('rx' + n + '-ppm', v('ppm', '0'), '0',
           function (x) { ponerAjuste(p + 'ppm', /^-?\d{1,3}$/.test(x) ? x : '0').then(pintarReceptores); })));
       }
       t.appendChild(r2);
@@ -690,7 +693,7 @@
       var bt = crear('label', 'casilla');
       var cb = crear('input'); cb.type = 'checkbox'; cb.id = 'rx' + n + '-bias'; cb.checked = v('bias', '0') === '1';
       cb.addEventListener('change', function () { ponerAjuste(p + 'bias', cb.checked ? '1' : '0'); });
-      bt.appendChild(cb); bt.appendChild(document.createTextNode('Alimentar la antena por el coaxial' + (equipo === 'sdrplay' ? ' (RSPdx: solo en la toma B)' : ' (si el equipo lo permite)')));
+      bt.appendChild(cb); bt.appendChild(document.createTextNode(tr('Alimentar la antena por el coaxial') + (equipo === 'sdrplay' ? tr(' (RSPdx: solo en la toma B)') : tr(' (si el equipo lo permite)'))));
       t.appendChild(bt);
       raiz.appendChild(t);
     });
@@ -726,7 +729,7 @@
     caja.hidden = con.length === 0;
     sonar(con.length > 0);
     if (!con.length) return;
-    $('alarma-texto').textContent = (con.length === 1 ? 'Mensaje de búsqueda y salvamento sin reconocer: ' : con.length + ' mensajes de búsqueda y salvamento sin reconocer: ')
+    $('alarma-texto').textContent = (con.length === 1 ? tr('Mensaje de búsqueda y salvamento sin reconocer: ') : con.length + tr(' mensajes de búsqueda y salvamento sin reconocer: '))
       + con.map(function (m) { return m.bbbb + ' (' + nombreFreq(m.freq) + ', ' + fechaUtc(m.recibido) + ')'; }).join(', ') + '.';
   }
 
@@ -737,22 +740,22 @@
     raiz.textContent = '';
     var v = function (k, defecto) { return ajustes[k] !== undefined && ajustes[k] !== '' ? ajustes[k] : defecto; };
     var r = crear('div', 'rejilla');
-    r.appendChild(campo('Horas que se conserva un mensaje desde la última vez que se oye (72 a 8760)', texto('retencion', v('retention_hours', '72'), '72',
+    r.appendChild(campo(tr('Horas que se conserva un mensaje desde la última vez que se oye (72 a 8760)'), texto('retencion', v('retention_hours', '72'), '72',
       function (x) { var n = Math.round(Number(x)); ponerAjuste('retention_hours', String(isFinite(n) ? Math.min(8760, Math.max(72, n)) : 72)).then(pintarSalida); })));
-    r.appendChild(campo('NMEA 0183 por UDP: destino (equipo:puerto; vacío, apagado)', texto('nrx-udp', v('nrx.udp', ''), '192.168.1.255:10110',
+    r.appendChild(campo(tr('NMEA 0183 por UDP: destino (equipo:puerto; vacío, apagado)'), texto('nrx-udp', v('nrx.udp', ''), '192.168.1.255:10110',
       function (x) { ponerAjuste('nrx.udp', /^[A-Za-z0-9.-]{1,70}:\d{1,5}$/.test(x) ? x : '').then(pintarSalida); })));
-    r.appendChild(campo('NMEA 0183 por TCP: puerto del servidor (0, apagado)', texto('nrx-tcp', v('nrx.tcp', '0'), '10110',
+    r.appendChild(campo(tr('NMEA 0183 por TCP: puerto del servidor (0, apagado)'), texto('nrx-tcp', v('nrx.tcp', '0'), '10110',
       function (x) { var n = Math.round(Number(x)); ponerAjuste('nrx.tcp', String(isFinite(n) && n >= 1024 && n <= 65535 ? n : 0)).then(pintarSalida); })));
-    r.appendChild(campo('Forma de la sentencia NRX', selector('nrx-format', [['furuno', 'Furuno (la de la app y el plotter APRS LoRa+)'], ['iec', 'IEC 61097-6 (la de la norma)']], v('nrx.format', 'furuno'),
+    r.appendChild(campo(tr('Forma de la sentencia NRX'), selector('nrx-format', [['furuno', tr('Furuno (la de la app y el plotter APRS LoRa+)')], ['iec', tr('IEC 61097-6 (la de la norma)')]], v('nrx.format', 'furuno'),
       function (x) { ponerAjuste('nrx.format', x); })));
     raiz.appendChild(r);
     var est = crear('p', 'nota'); est.id = 'estado-nrx'; raiz.appendChild(est);
     pedir('/api/nrx').then(function (j) {
       var partes = [];
-      if (j.udp) partes.push('UDP a ' + j.udp);
-      if (j.tcp) partes.push('servidor TCP en el puerto ' + j.tcp + ' (' + j.clients + (j.clients === 1 ? ' programa conectado' : ' programas conectados') + ')');
-      est.textContent = (partes.length ? 'Salida NMEA: ' + partes.join(' y ') + '. Mensajes enviados desde que arrancó: ' + j.sent + '.' : 'Salida NMEA apagada.')
-        + (j.error ? ' Último fallo: ' + j.error + '.' : '');
+      if (j.udp) partes.push(tr('UDP a ') + j.udp);
+      if (j.tcp) partes.push(tr('servidor TCP en el puerto ') + j.tcp + ' (' + j.clients + (j.clients === 1 ? tr(' programa conectado') : tr(' programas conectados')) + ')');
+      est.textContent = (partes.length ? tr('Salida NMEA: ') + partes.join(tr(' y ')) + tr('. Mensajes enviados desde que arrancó: ') + j.sent + '.' : tr('Salida NMEA apagada.'))
+        + (j.error ? tr(' Último fallo: ') + j.error + '.' : '');
     }).catch(function () { est.textContent = ''; });
   }
 
@@ -804,7 +807,7 @@
       pintarAlarma();
     }).catch(function (e) {
       error.hidden = false;
-      error.textContent = 'No se puede consultar el receptor: ' + e.message + '.';
+      error.textContent = tr('No se puede consultar el receptor: ') + e.message + '.';
     });
   }
 
@@ -829,46 +832,97 @@
   $('filtro-todo').addEventListener('change', function (e) { filtro.todo = e.target.checked; pintarLista(); });
   $('reconocer').addEventListener('click', function () {
     enviar('/api/alarm/ack').then(leerTodo).catch(function (e) {
-      $('alarma-texto').textContent = 'No se pudo reconocer la alarma: ' + e.message + '.';
+      $('alarma-texto').textContent = tr('No se pudo reconocer la alarma: ') + e.message + '.';
     });
   });
   $('borrar-todos').addEventListener('click', function () {
-    if (window.confirm('¿Borrar todos los mensajes guardados? Los que las estaciones repitan en las próximas 72 horas no volverán a aparecer.')) borrar('all');
+    if (window.confirm(tr('¿Borrar todos los mensajes guardados? Los que las estaciones repitan en las próximas 72 horas no volverán a aparecer.'))) borrar('all');
   });
 
-  // Aspecto: automático (el del equipo), claro u oscuro; se recuerda en este navegador
-  var tema = $('tema');
-  try { tema.value = localStorage.getItem('navtex-tema') || 'auto'; } catch (e) { tema.value = 'auto'; }
-  if (tema.value !== 'claro' && tema.value !== 'oscuro') tema.value = 'auto';
-  tema.addEventListener('change', function () {
-    if (tema.value === 'auto') document.documentElement.removeAttribute('data-tema');
-    else document.documentElement.setAttribute('data-tema', tema.value);
-    try { localStorage.setItem('navtex-tema', tema.value); } catch (e) { /* no se recuerda, pero se aplica */ }
-  });
+  // Aspecto: botón con menú, como en la WebUI del tracker APRS LoRa+. Los iconos son de Bootstrap Icons (MIT).
+  (function () {
+    var SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">';
+    var LUNA = '<path d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/>';
+    var ICONOS = {
+      sistema: SVG + '<path d="M0 4s0-2 2-2h12s2 0 2 2v6s0 2-2 2h-4q0 1 .25 1.5H11a.5.5 0 0 1 0 1H5a.5.5 0 0 1 0-1h.75Q6 13 6 12H2s-2 0-2-2zm1.398-.855a.76.76 0 0 0-.254.302A1.5 1.5 0 0 0 1 4.01V10c0 .325.078.502.145.602q.105.156.302.254a1.5 1.5 0 0 0 .538.143L2.01 11H14c.325 0 .502-.078.602-.145a.76.76 0 0 0 .254-.302 1.5 1.5 0 0 0 .143-.538L15 9.99V4c0-.325-.078-.502-.145-.602a.76.76 0 0 0-.302-.254A1.5 1.5 0 0 0 13.99 3H2c-.325 0-.502.078-.602.145"/></svg>',
+      auto: SVG + '<path d="M8 15A7 7 0 1 0 8 1zm0 1A8 8 0 1 1 8 0a8 8 0 0 1 0 16"/></svg>',
+      claro: SVG + '<path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6m0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8M8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0m0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13m8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5M3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8m10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0m-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0m9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707M4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708"/></svg>',
+      oscuro: SVG + LUNA + '</svg>',
+      noche: SVG + LUNA + '<path d="M10.794 3.148a.217.217 0 0 1 .412 0l.387 1.162c.173.518.579.924 1.097 1.097l1.162.387a.217.217 0 0 1 0 .412l-1.162.387a1.73 1.73 0 0 0-1.097 1.097l-.387 1.162a.217.217 0 0 1-.412 0l-.387-1.162A1.73 1.73 0 0 0 9.31 6.593l-1.162-.387a.217.217 0 0 1 0-.412l1.162-.387a1.73 1.73 0 0 0 1.097-1.097z"/></svg>'
+    };
+    var NOMBRES = { sistema: tr('Sistema'), auto: tr('Automático'), claro: tr('Claro'), oscuro: tr('Oscuro'), noche: tr('Noche') };
+    var T = window.NAVTEX_TEMA, boton = $('tema-boton'), menu = $('tema-menu');
+    function cerrar() { menu.classList.remove('abierto'); boton.setAttribute('aria-expanded', 'false'); }
+    function pintar() {
+      var m = T.modo(), t = T.aplicar();
+      // los iconos son constantes de este archivo, no datos recibidos
+      boton.innerHTML = ICONOS[m];
+      boton.title = tr('Aspecto: ') + NOMBRES[m] + (m === 'sistema' || m === 'auto' ? tr(' (ahora ') + NOMBRES[t].toLowerCase() + ')' : '');
+      boton.setAttribute('aria-label', boton.title);
+      Array.prototype.forEach.call(menu.querySelectorAll('button[data-modo]'), function (b) {
+        var si = b.getAttribute('data-modo') === m;
+        b.classList.toggle('elegido', si);
+        b.setAttribute('aria-checked', si ? 'true' : 'false');
+        b.querySelector('.ti').innerHTML = ICONOS[b.getAttribute('data-modo')];
+      });
+      $('tema-nota-auto').textContent = T.posicion() ? tr('claro de día y oscuro de noche (el sol en la posición del receptor)') : tr('claro de 8 a 20 h y oscuro el resto (aún sin posición)');
+    }
+    pintar();
+    boton.addEventListener('click', function (e) {
+      e.stopPropagation();
+      boton.setAttribute('aria-expanded', menu.classList.toggle('abierto') ? 'true' : 'false');
+    });
+    menu.addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-modo]');
+      if (!b) return;
+      T.poner(b.getAttribute('data-modo'));
+      pintar();
+      cerrar();
+    });
+    document.addEventListener('click', function (e) { if (!menu.contains(e.target)) cerrar(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') cerrar(); });
+    if (window.matchMedia) {
+      var mq = window.matchMedia('(prefers-color-scheme: dark)');
+      var alCambiar = function () { if (T.modo() === 'sistema') pintar(); };
+      if (mq.addEventListener) mq.addEventListener('change', alCambiar); else if (mq.addListener) mq.addListener(alCambiar);
+    }
+    setInterval(function () { if (T.modo() === 'auto') pintar(); }, 60000);
+    repintarAspecto = pintar;
+  })();
+
+  // Idioma: el botón enseña el otro idioma y cambia a él
+  (function () {
+    var b = $('idioma-boton'), otro = I18N.idioma === 'en' ? 'es' : 'en';
+    b.textContent = otro.toUpperCase();
+    b.title = otro === 'en' ? 'English' : 'Español';
+    b.setAttribute('aria-label', b.title);
+    b.setAttribute('lang', otro);
+    b.addEventListener('click', function () { I18N.poner(otro); });
+  })();
 
   $('form-posicion').addEventListener('submit', function (ev) {
     ev.preventDefault();
     var p = leerPosicion($('posicion').value);
-    if (!p) { avisar('estado-ajustes', false, 'No entiendo esa posición. Ejemplos: 36.53, -6.29 o IM66uq.'); return; }
+    if (!p) { avisar('estado-ajustes', false, tr('No entiendo esa posición. Ejemplos: 36.53, -6.29 o IM66uq.')); return; }
     var valor = p.lat.toFixed(4) + ',' + p.lon.toFixed(4);
     ajustes.position = valor;
     enviar('/api/settings/position/' + valor).then(function () {
       $('posicion').value = '';
-      avisar('estado-ajustes', true, 'Posición guardada.');
+      avisar('estado-ajustes', true, tr('Posición guardada.'));
       pintarPosicion(); pintarAjustes(); pintarProximas(); pintarLista();
-    }).catch(function (e) { avisar('estado-ajustes', false, 'No se pudo guardar: ' + e.message + '.'); });
+    }).catch(function (e) { avisar('estado-ajustes', false, tr('No se pudo guardar: ') + e.message + '.'); });
   });
   $('quitar-posicion').addEventListener('click', function () {
     ajustes.position = '';
     enviar('/api/settings/position/').then(function () { pintarPosicion(); pintarAjustes(); pintarProximas(); pintarLista(); })
-      .catch(function (e) { avisar('estado-ajustes', false, 'No se pudo guardar: ' + e.message + '.'); });
+      .catch(function (e) { avisar('estado-ajustes', false, tr('No se pudo guardar: ') + e.message + '.'); });
   });
 
   $('usar-gps').addEventListener('change', function () {
     ajustes.position_source = $('usar-gps').checked ? 'gps' : 'manual';
     enviar('/api/settings/position_source/' + ajustes.position_source).then(function () {
       pintarPosicion(); pintarAjustes(); pintarProximas(); pintarLista();
-    }).catch(function (e) { avisar('estado-ajustes', false, 'No se pudo guardar: ' + e.message + '.'); });
+    }).catch(function (e) { avisar('estado-ajustes', false, tr('No se pudo guardar: ') + e.message + '.'); });
   });
 
   montarEstado();

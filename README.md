@@ -22,7 +22,7 @@ Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.c
 | Tres frecuencias | 518 kHz (internacional) y 490 kHz (nacional) a la vez con un receptor; 4209,5 kHz (onda corta) con el mismo receptor por horario, o con un segundo receptor a la vez |
 | Dos tipos de receptor | SDRplay (RSP1A, RSP1B, RSP2, RSPdx, RSPdx-R2) y RTL-SDR (muestreo directo, conversor integrado o externo) |
 | Dos receptores a la vez | Cada uno con su equipo y su banda, ajustados desde la web y sin reiniciar nada |
-| Interfaz web | En español, adaptada al móvil, con aspecto claro, oscuro o automático, y sin cargar nada de Internet |
+| Interfaz web | En español o en inglés, adaptada al móvil y sin cargar nada de Internet. Aspecto del sistema, automático por la salida y la puesta del sol, claro, oscuro o de noche (rojo) |
 | Estaciones del mundo | 263 estaciones con letra, posición, horas, alcance e idioma; ordenadas por distancia desde la posición propia |
 | Posición por GPS | Tomada de gpsd; recuadro con la posición junto a la hora |
 | Salida para otros programas | API de solo lectura en JSON; [S.A.T.-APRS+](https://github.com/EA7JRS/sat-aprs) la usa para convertir los mensajes en avisos |
@@ -105,6 +105,17 @@ sudo systemctl start sdrconnect          # devolvérselo a SDRconnect
 Registro en vivo: `journalctl -u 'navtex-receiver@*' -f`
 
 ## La interfaz web
+
+**Idioma.** Español o inglés. De serie, el del navegador; el botón `EN` / `ES` de la cabecera lo cambia y se recuerda en ese navegador. Los mensajes se muestran siempre tal como se reciben.
+
+**Aspecto.** El botón de al lado abre el mismo menú que la WebUI del tracker APRS LoRa+:
+
+| Modo | Qué hace |
+| :--- | :--- |
+| Sistema | El del equipo (de serie) |
+| Automático | Claro de día y oscuro de noche, por la salida y la puesta del sol en la posición del receptor; sin posición, claro de 8 a 20 h |
+| Claro, Oscuro | Fijos |
+| Noche | Rojo sobre negro, para no perder la visión nocturna |
 
 ### Mensajes
 

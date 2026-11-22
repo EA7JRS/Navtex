@@ -2,6 +2,17 @@
 
 Fork EA7JRS/Navtex del receptor NAVTEX de bartelvdh. Las entradas dicen también qué se probó y qué no. Lo descrito en una fase puede haber cambiado en las posteriores (por ejemplo, los servicios y sus ajustes): el estado actual es el del [README](README.md).
 
+## [1.4.0] - 2026-11-22
+
+### Interfaz en español e inglés, y selector de aspecto como el de APRS LoRa+
+
+- **Idioma.** La interfaz está en español y en inglés. De serie toma el idioma del navegador; el botón `EN` / `ES` de la cabecera lo cambia, y la elección se guarda en el navegador. Los mensajes NAVTEX no se traducen: se muestran tal como se reciben. En inglés, los decimales van con punto y el oeste es `W`.
+- **Aspecto.** El desplegable se sustituye por el botón con menú de la WebUI del tracker APRS LoRa+, con sus cinco modos: Sistema, Automático (claro de día y oscuro de noche, por la salida y la puesta del sol en la posición del receptor; sin posición, de 8 a 20 h), Claro, Oscuro y Noche (rojo sobre negro, para conservar la visión nocturna).
+- Quien tuviera elegido «automático» en una versión anterior pasa al automático por el sol; «Sistema» es el de antes.
+- Probado en un navegador en los dos idiomas y en los cinco aspectos. El texto inglés no lo ha revisado un hablante nativo.
+
+---
+
 ## [1.3.0] - 2026-11-22
 
 ### Alarma de búsqueda y salvamento y sentencias de la norma IEC 61097-6

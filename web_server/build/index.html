@@ -12,6 +12,7 @@
   <meta name="color-scheme" content="light dark">
   <title>Navtex</title>
   <script src="tema.js"></script>
+  <script src="i18n.js"></script>
   <link rel="stylesheet" href="estilo.css">
 </head>
 <body>
@@ -28,13 +29,19 @@
       <button type="button" class="pestana" data-vista="estaciones" id="pestana-estaciones">Estaciones</button>
       <button type="button" class="pestana" data-vista="receptores" id="pestana-receptores">Receptores</button>
       <button type="button" class="pestana" data-vista="acerca" id="pestana-acerca">Acerca de</button>
-      <label class="tema"><span class="oculto">Aspecto</span>
-        <select id="tema">
-          <option value="auto">Aspecto: automático</option>
-          <option value="claro">Aspecto: claro</option>
-          <option value="oscuro">Aspecto: oscuro</option>
-        </select>
-      </label>
+      <div class="ajustes-vista">
+        <div class="tema-elegir">
+          <button type="button" class="boton-icono" id="tema-boton" aria-haspopup="true" aria-expanded="false" aria-label="Aspecto"></button>
+          <div class="tema-menu" id="tema-menu" role="menu">
+            <button type="button" role="menuitemradio" data-modo="sistema"><span class="ti"></span><span>Sistema</span><small>el del equipo</small></button>
+            <button type="button" role="menuitemradio" data-modo="auto"><span class="ti"></span><span>Automático</span><small id="tema-nota-auto">salida y puesta del sol</small></button>
+            <button type="button" role="menuitemradio" data-modo="claro"><span class="ti"></span><span>Claro</span></button>
+            <button type="button" role="menuitemradio" data-modo="oscuro"><span class="ti"></span><span>Oscuro</span></button>
+            <button type="button" role="menuitemradio" data-modo="noche"><span class="ti"></span><span>Noche</span><small>rojo, conserva la visión nocturna</small></button>
+          </div>
+        </div>
+        <button type="button" class="boton-icono" id="idioma-boton" aria-label="Idioma"></button>
+      </div>
     </nav>
   </header>
 

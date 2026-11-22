@@ -52,3 +52,7 @@ Archivos que proceden del original, modificados o no en este fork: `receiver/cap
 ## Bibliotecas con las que se enlaza
 
 libmicrohttpd (LGPL), cJSON (MIT), SQLite (dominio público), librtlsdr (GPL-2.0-or-later, opcional) y la API de SDRplay (privativa, opcional).
+
+## Iconos de la interfaz
+
+Los cinco iconos del selector de aspecto (`web_server/build/app.js`) son de [Bootstrap Icons](https://icons.getbootstrap.com/), © The Bootstrap Authors, bajo licencia MIT.
