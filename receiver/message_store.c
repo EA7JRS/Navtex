@@ -566,6 +566,9 @@ char *get_status_json(void) {
         get_current_timestamp(ts);
         iso_timestamp(ts, iso, sizeof(iso));
         cJSON_AddStringToObject(json, "now", iso);
+#ifdef PACKAGE_VERSION
+        cJSON_AddStringToObject(json, "version", PACKAGE_VERSION);
+#endif
         if (sqlite3_prepare_v2(db, "select tag,value from status", -1, &stmt, NULL) == SQLITE_OK) {
                 while (sqlite3_step(stmt) == SQLITE_ROW)
                         if (sqlite3_column_text(stmt, 0) != NULL && sqlite3_column_text(stmt, 1) != NULL)

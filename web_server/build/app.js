@@ -245,6 +245,7 @@
       $('sinc-' + f).textContent = isFinite(t) ? haceCuanto(t, ahora) : 'todavía ninguno';
       $('sinc-' + f + '-detalle').textContent = 'último sincronismo';
     });
+    if (typeof estado.version === 'string') $('version').textContent = 'v' + estado.version;
     $('hora-utc-detalle').textContent = (estado.messages || 0) + (estado.messages === 1 ? ' mensaje guardado' : ' mensajes guardados');
   }
 

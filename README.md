@@ -1,233 +1,262 @@
 # Navtex
-Navtex receiver based on SDRPLAY SDR devices, meant for practical use on recreational boats
 
+Receptor NAVTEX por software para Linux, con SDRplay o RTL-SDR. Escucha en segundo plano 518 y 490 kHz a la vez, o 4209,5 kHz en onda corta, guarda los mensajes y los enseña en una interfaz web en español que funciona sin Internet.
 
-The main dish of this project is an sdr (software defined radio) experiment.
-As a recreational sailor and licenced Ham operator, I though it was a fun and useful project to go for.
-The main trigger is the fact that no good and usable navtex decoding software for use in leisure crafts exists at this moment.
-Projects like openplotter have brought together a great deal of excellent software to cover a lot of the navigation and comminication needs of a recreational boat. However a navtext receiver is still a missing component in that ecosystem.
-Sure there's excellent software like YAND and FLDigi. The thing is that those are just meant for the occasional HAM that wants to capture some navtex messages for fun.
-As a sailor you need to be able to receive those messages without being in front of a GUI at the exact moment the messages are transmitted. Reception should happen in background. Next to that Navtex software should allow you to select messages based on message types (subject indicator) and message sources (transmitter identity), so the B1 and B2 characters of the navtex message, like a standard commercial NAVTEX receiver, more or less.
+Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.com/bartelvdh/Navtex) · licencia MIT · parte del ecosistema APRS LoRa+
 
-So I decided to create this background process that allows navtex demodulation and decoding.
-Next to that I created a web-based GUI application for displaying messages. The gui application is based on the react javascript framework. The communication with the backend is via a json based (REST) API. This API is exposed by a lightweight http server in the backend. Communication between the web server and the receiver process runs via an SQLite database.
+[![Donar con PayPal](https://img.shields.io/badge/Donar-PayPal-0070ba?logo=paypal&logoColor=white)](https://paypal.me/ea7jrs)
 
-Note that the sdr code is written exclusively for sdrplay devices. The reason is that these are high quality devices, with a fairly well documented API, and with good developer support.
+![Mensajes recibidos, en aspecto oscuro](docs/img/mensajes.png)
 
-# Installation
-Before installing this software, make sure to install the sdrplay API version 3.15 or higher (https://www.sdrplay.com/api/) if you use an SDRplay receiver, and/or librtlsdr-dev for RTL-SDR dongles (see the fork notes below)
+*Las capturas muestran mensajes de ejemplo, cargados para ilustrar la pantalla.*
 
+> **Aviso.** Este programa es una ayuda. No sustituye a un receptor NAVTEX homologado donde este sea obligatorio, ni a las publicaciones oficiales.
 
+## Qué hace
 
-Also run following commands to install some prerequisites:
-
-sudo apt-get install libcjson-dev
-
-sudo apt-get install libsqlite3-dev
-
-sudo apt-get install libmicrohttpd-dev
-
-sudo apt-get install sqlite3
-
-sudo apt-get install autotools-dev autoconf
-
-
-then git clone this repository:
-
-git clone https://github.com/bartelvdh/Navtex
-
-
-and do the following:
-
-cd Navtex
-
-autoreconf
-
-automake --add-missing
-
-autoreconf
-
-./configure
-
-make
-
-sudo make install
-
-
-# Fork EA7JRS/Navtex
-
-Este fork parte del trabajo de bartelvdh (licencia MIT, que se conserva) y lo adapta al ecosistema APRS LoRa+ / S.A.T.-APRS+. Cambios del fork: © 2026 Manuel - EA7JRS, bajo la misma licencia MIT.
-
-## Cambios
-
-### Fase 1 · seguridad y fallos
-
-Servidor web (`navtexwebserver`):
-- Una dirección larga desbordaba un búfer de 80 bytes y tumbaba el servidor. Ahora las direcciones se comprueban y no se copian a búferes fijos.
-- Se podía leer cualquier archivo del equipo (`/../archivo`, `//etc/...`). Ahora solo se sirven archivos de la carpeta de la interfaz.
-- `/saveconfig` metía el texto recibido en la orden SQL. Ahora solo admite los cuatro ajustes que existen, con valores de letras A–Z, y usa sentencias preparadas.
-- Las respuestas de la API salen como `application/json` y los archivos con su tipo.
-- Dirección de escucha opcional: `navtexwebserver [puerto] [dirección]`, por ejemplo `navtexwebserver 8080 127.0.0.1`.
-
-Receptor (`navtexreceiver`):
-- La opción `-d` (grabación de depuración) no estaba declarada y no se podía usar.
-- Con SIGINT o SIGTERM deja de recibir y libera el receptor, para que otro programa pueda usarlo.
-- Si el receptor no se puede abrir, se desconecta o deja de entregar muestras durante 15 s, el programa termina con código 1 en vez de quedarse en marcha sin recibir. Así un gestor de servicios lo puede reiniciar.
-
-Base de datos e instalación:
-- La antigüedad de los mensajes se calculaba con una hora de error durante el horario de verano.
-- El receptor y el servidor web esperan si el otro tiene la base de datos ocupada, en vez de fallar.
-- `make install` ya no sustituye una base de datos existente por una vacía (se perdían los mensajes y la configuración) ni anida `build/build`.
-- La carpeta `/opt/Navtex` y la base de datos dejan de ser escribibles por cualquiera (`777`/`666` → `775`/`664`) y pasan a ser del usuario que ejecuta `sudo make install`.
-
-### Fase 2 · receptores RTL-SDR y grabaciones
-
-El receptor ya no depende de un solo tipo de equipo. La entrada de muestras está separada del descodificador (`receiver/iq_source.h`) y hay tres orígenes:
-
-| Origen | Opción | Notas |
-| :--- | :--- | :--- |
-| SDRplay | `-s sdrplay` | Como hasta ahora. Es el origen por defecto si la API de SDRplay está instalada al compilar. |
-| RTL-SDR | `-s rtlsdr` | Necesita `librtlsdr-dev` al compilar. Ver abajo cómo llegar a 518 kHz. |
-| Grabación | `-f archivo` | Descodifica una grabación en vez de un receptor: para pruebas y para repasar una recepción dudosa. |
-
-`./configure` detecta qué bibliotecas hay y dice al final qué receptores quedan incluidos (`receivers: SDRplay yes, RTL-SDR yes`). Ninguna de las dos es obligatoria.
-
-```
-sudo apt-get install librtlsdr-dev
-```
-
-Un RTL-SDR no sintoniza por sí solo 490 y 518 kHz. Hay tres formas de llegar:
-
-| Equipo | Orden |
+| Función | Detalle |
 | :--- | :--- |
-| **Nooelec NESDR SMArt v5**: muestreo directo por la rama Q, de 0,1 a 25 MHz, sin cambiar controlador ni tocar el equipo | `navtexreceiver -s rtlsdr` |
-| Otros con muestreo directo (RTL-SDR Blog V3 y similares, antena a la entrada de HF) | `navtexreceiver -s rtlsdr` (rama Q; rama I: `-D 1`) |
-| Conversor integrado (RTL-SDR Blog V4) | `navtexreceiver -s rtlsdr` |
-| Conversor externo (por ejemplo, de 125 MHz) | `navtexreceiver -s rtlsdr -u 125000000` |
+| Recepción en segundo plano | Los mensajes se guardan aunque nadie esté mirando; cada estación emite cada cuatro horas, en su turno de diez minutos |
+| Tres frecuencias | 518 kHz (internacional) y 490 kHz (nacional) a la vez con un receptor; 4209,5 kHz (onda corta) con el mismo receptor por horario, o con un segundo receptor a la vez |
+| Dos tipos de receptor | SDRplay (RSP1A, RSP1B, RSP2, RSPdx, RSPdx-R2) y RTL-SDR (muestreo directo, conversor integrado o externo) |
+| Dos receptores a la vez | Cada uno con su equipo y su banda, ajustados desde la web y sin reiniciar nada |
+| Interfaz web | En español, adaptada al móvil, con aspecto claro, oscuro o automático, y sin cargar nada de Internet |
+| Estaciones del mundo | 263 estaciones con letra, posición, horas, alcance e idioma; ordenadas por distancia desde la posición propia |
+| Posición por GPS | Tomada de gpsd; recuadro con la posición junto a la hora |
+| Salida para otros programas | API de solo lectura en JSON; [S.A.T.-APRS+](https://github.com/EA7JRS/sat-aprs) la usa para convertir los mensajes en avisos |
+| Mensajes incompletos | Una recepción cortada se guarda marcada, y no sustituye a una copia mejor |
 
-El modo de muestreo se elige solo según el modelo que anuncia el equipo por USB (rama Q para el NESDR SMArt v5 y para los que no se reconocen; apagado para el Blog V4 y con `-u`), y el arranque lo dice. `-D 0`, `-D 1` o `-D 2` lo fuerzan.
+## Estado de las pruebas
 
-El NESDR SMArt v5 no tiene alimentación por el coaxial: una antena activa necesita su propio inyector.
+Probado el 22-11-2026 en un Intel NUC con Debian 13:
 
-Otras opciones del RTL-SDR: `-i` índice del equipo, `-S` número de serie (con varios equipos conectados), `-g` ganancia del sintonizador en dB (automática si no se da; no se usa en muestreo directo), `-P` corrección en ppm y `-b` alimentación por el coaxial. `navtexreceiver -h` las lista todas.
+- la instalación y los servicios;
+- un SDRplay RSPdx-R2 y un Nooelec NESDR SMArt v5 abiertos y recibiendo muestras a la vez;
+- la posición por gpsd, con un Leo Bodnar LBE-1420;
+- la interfaz web desde otros equipos de la red;
+- el descodificador, con dos grabaciones reales de NAVTEX.
 
-Con 8 bits y sin filtros de entrada, un RTL-SDR recibe NAVTEX peor que un SDRplay: en onda media las emisoras de radiodifusión cercanas lo saturan con facilidad. Un filtro paso bajo o una antena activa sintonizada ayudan mucho.
+**Sin probar todavía:** la recepción de un mensaje completo del aire, y una emisión real en 4209,5 kHz. El detalle de cada parte está en el [historial de cambios](CHANGELOG.md).
 
-Grabaciones: 252 000 muestras por segundo centradas en 504 kHz, en `.wav` de 16 bits con I y Q en los dos canales (lo que escribe la opción `-d`) o en bruto de 8 bits sin signo (lo que escribe `rtl_sdr -s 252000`). Con `-t` se reproduce a velocidad real.
+## Qué hace falta
 
-Probado: la cadena completa, desde el archivo de muestras hasta el texto, con dos recepciones reales de NAVTEX colocadas a la vez en 518 y 490 kHz, en los dos formatos de archivo. El origen RTL-SDR compila y enlaza con `librtlsdr` y falla con un mensaje claro si no hay equipo; **falta probarlo con un RTL-SDR real**. El origen SDRplay se ha reorganizado sin cambiar sus ajustes; **falta probarlo en un equipo con la API de SDRplay**.
+- Un equipo con Linux. Está hecho y probado en Debian 13; un procesador modesto basta.
+- Un receptor:
+  - **SDRplay**, con su API 3.15 o posterior instalada ([sdrplay.com/api](https://www.sdrplay.com/api/)); o
+  - **RTL-SDR** que llegue a onda media: por muestreo directo (Nooelec NESDR SMArt v5, RTL-SDR Blog V3), con conversor integrado (RTL-SDR Blog V4) o con conversor externo.
+- Una antena para 490–518 kHz. Las antenas activas de NAVTEX necesitan alimentación; véase [Antenas](#antenas).
+- Opcional: un GPS servido por gpsd, para la posición propia.
 
-### Fase 3 · servicios y mensajes incompletos
+## Instalación
 
-Servicios de systemd (`systemd/`, instalador `tools/instalar-servicios.sh`):
+Dependencias (falta la API de SDRplay, que se instala aparte, si va a usar un SDRplay):
 
+```bash
+sudo apt install build-essential autoconf automake libcjson-dev libsqlite3-dev libmicrohttpd-dev sqlite3 librtlsdr-dev
 ```
-./configure && make && sudo make install
+
+Compilar, instalar y montar los servicios:
+
+```bash
+git clone https://github.com/EA7JRS/Navtex.git
+cd Navtex
+autoreconf -i && automake --add-missing; autoreconf
+./configure
+make
+sudo make install
 sudo sh tools/instalar-servicios.sh
 ```
 
-- `navtex-receiver` y `navtex-web` se ejecutan con su usuario, no como `root`. La interfaz web va además encerrada en su carpeta.
-- Los ajustes están en `/etc/default/navtex`: opciones del receptor (`RECEIVER_OPTS`), puerto y dirección de la interfaz web.
-- Si el receptor no está o se pierde, el servicio se reinicia solo cada 15 segundos hasta que vuelva.
-- **Receptor compartido.** Si en el equipo hay otros servicios que usan el mismo SDRplay (`sdrconnect`, `sdrpp-server`), el instalador los declara incompatibles con `navtex-receiver`: arrancar uno para el otro. En ese caso el receptor NAVTEX no arranca solo; se pone con `sudo systemctl start navtex-receiver` y se vuelve con `sudo systemctl start sdrconnect`. Con un RTL-SDR dedicado (`RECEIVER_OPTS="-s rtlsdr"`) no hay conflicto y arranca siempre.
-- `sudo sh tools/instalar-servicios.sh --quitar` los retira.
+`./configure` dice al final qué receptores quedan incluidos (`receivers: SDRplay yes, RTL-SDR yes`); ninguno de los dos es obligatorio. El instalador de servicios toma como usuario el que ejecuta `sudo`, o el que se indique con `--usuario`.
 
-Salida del receptor: en una terminal sigue mostrando cada carácter recibido; como servicio solo escribe lo que importa (sincronismo, comienzo de mensaje, mensaje guardado). `-v` y `-q` lo fuerzan.
+Después abra `http://<equipo>:8080/`. Si hay cortafuegos, abra ese puerto a la red local:
 
-Mensajes:
-- Cada mensaje se guarda con una marca de completo o incompleto (columna `complete`, que también sale en `/messagelist`). Las bases de datos anteriores se actualizan solas.
-- Una recepción cortada ya no sustituye a una copia completa del mismo mensaje recibida en las últimas 24 horas, ni a otra incompleta más larga.
-- Un mensaje de 490 kHz ya no borra al de 518 kHz con el mismo identificador (y viceversa).
-- Si llega una cabecera nueva sin haber terminado el mensaje anterior, este se guarda como incompleto; antes los dos se mezclaban bajo el identificador del primero.
+```bash
+sudo ufw allow from 192.168.0.0/16 to any port 8080 proto tcp
+```
 
-Robustez:
-- Las líneas y los mensajes se acumulaban en búferes de 5000 caracteres sin comprobar el límite; ahora no se puede escribir fuera de ellos, llegue lo que llegue por radio.
-- Las expresiones de comienzo y fin de mensaje se compilaban de nuevo en cada línea recibida y no se liberaban: el receptor perdía memoria continuamente.
+**Actualizar:** `git pull` y repetir desde `autoreconf`. La base de datos con los mensajes y los ajustes se conserva. **Retirar los servicios:** `sudo sh tools/instalar-servicios.sh --quitar`.
 
-Probado: la recepción cortada, con una grabación real seguida de ruido (se guarda como incompleta y, repetida, no duplica ni degrada); las reglas de guardado, sobre una base de datos del formato anterior; las unidades, con `systemd-analyze verify`. **Sin probar: el instalador en un equipo con systemd**, y un mensaje completo de principio a fin (las grabaciones reales disponibles no llegan al `NNNN`).
+## Servicios
 
-### Fase 4 · salida para otros programas
+| Servicio | Qué hace |
+| :--- | :--- |
+| `navtex-web` | La interfaz web y la API, en el puerto 8080 |
+| `navtex-receiver@1` | Receptor 1 |
+| `navtex-receiver@2` | Receptor 2: siempre en marcha, pero no toca ningún equipo hasta que se enciende en la web |
 
-La interfaz web ofrece además una API de solo lectura, pensada para que otro programa (S.A.T.-APRS+, un plotter, un guion propio) recoja los mensajes por la red:
+Ninguno se ejecuta como `root`. El puerto, la dirección de escucha y el gpsd de la interfaz web están en `/etc/default/navtex`.
+
+**Receptor compartido.** Un equipo solo lo puede usar un programa a la vez. Si en el sistema hay servicios `sdrconnect` o `sdrpp-server`, el instalador declara el receptor 1 incompatible con ellos: arrancar uno para el otro, y el receptor 1 no arranca solo.
+
+```bash
+sudo systemctl start navtex-receiver@1   # recibir NAVTEX con el SDRplay
+sudo systemctl start sdrconnect          # devolvérselo a SDRconnect
+```
+
+Registro en vivo: `journalctl -u 'navtex-receiver@*' -f`
+
+## La interfaz web
+
+### Mensajes
+
+Lista con el tema en claro, la primera línea del texto, la estación, la frecuencia y hace cuánto llegó. El color indica la importancia: salvamento, aviso meteorológico, aviso a los navegantes. Hay marcas de «nuevo» y de «cortado», filtros por frecuencia y por tema, y búsqueda en el texto. Un asterisco en el texto es un carácter que no se pudo recibir bien.
+
+### Estaciones
+
+![Estaciones ordenadas por distancia, con la posición del GPS](docs/img/estaciones.png)
+
+- **Mi posición:** la del GPS si lo hay; si no, la que se escriba (latitud y longitud en grados decimales, o un localizador).
+- **Por frecuencia:** las estaciones de la más cercana a la más lejana, con su letra, alcance, idioma y próxima emisión, y cuáles quedan en alcance. Se siguen con un toque, o todas las que están en alcance de una vez.
+- **Próximas emisiones** de las estaciones que se siguen.
+- **Temas:** los temas A, B, D y L (avisos a los navegantes, avisos meteorológicos y salvamento) no se pueden quitar, como en un receptor homologado.
+
+En la cabecera de cada mensaje, `ZCZC GA12`, la primera letra es la estación y la segunda el tema. Seguir una letra muestra los mensajes de todas las estaciones que la usan.
+
+### Receptores
+
+![Los dos receptores, con la banda por horario](docs/img/receptores.png)
+
+Para cada uno de los dos receptores: encendido, equipo, banda y los ajustes del equipo. El receptor aplica los cambios en unos segundos.
+
+| Banda | Qué escucha |
+| :--- | :--- |
+| 518 y 490 kHz | Las dos a la vez |
+| 4209,5 kHz | Solo onda corta |
+| Por horario | 518 y 490 kHz, y pasa a 4209,5 kHz en las horas UTC indicadas, desde un minuto antes hasta once después |
+
+Un receptor escucha una banda o la otra: 518 y 490 kHz van juntas porque están a 28 kHz, pero 4209,5 kHz queda a 3,7 MHz. Para las tres a la vez hacen falta dos equipos.
+
+### Aspecto
+
+Claro, oscuro o automático (el del equipo), con el selector de la cabecera. Se recuerda en cada navegador.
+
+## Receptores
+
+### SDRplay
+
+Vale con RSP1A, RSP1B, RSP2, RSPdx y RSPdx-R2. En el RSPdx y el RSPdx-R2 se elige la toma de antena (A, B o C); la alimentación por el coaxial solo existe en la toma B.
+
+### RTL-SDR
+
+Un RTL-SDR no sintoniza por sí solo estas frecuencias. Hay tres formas de llegar, y el programa elige según el modelo que anuncia el equipo:
+
+| Equipo | Modo |
+| :--- | :--- |
+| Nooelec NESDR SMArt v5 | Muestreo directo, rama Q (de 0,1 a 25 MHz, sin cambiar nada) |
+| RTL-SDR Blog V3 y otros con muestreo directo | Rama Q; la rama I se elige a mano |
+| RTL-SDR Blog V4 | Apagado: usa su conversor integrado |
+| Con conversor externo | Apagado; se indica la frecuencia del conversor |
+
+Con 8 bits y sin filtros de entrada, un RTL-SDR recibe NAVTEX peor que un SDRplay: en onda media las emisoras de radiodifusión cercanas lo saturan con facilidad. Una antena de NAVTEX, que solo deja pasar su banda, lo resuelve en buena parte.
+
+### Antenas
+
+Las antenas activas de NAVTEX necesitan alimentación, y no siempre vale la que da el receptor:
+
+| Antena | Dato publicado |
+| :--- | :--- |
+| JRC NAW-333 | 518, 490 y 4209,5 kHz; 6,5 V y 23 mA; 50 Ω (manual del JRC NCR-333) |
+| NASA Marine H Vector | Activa, alimentada por el coaxial; el fabricante no publica la tensión |
+
+La alimentación por el coaxial de un RSPdx ronda los 4,7 V, y el Nooelec NESDR SMArt v5 no tiene. Para una antena que pida otra tensión hace falta un inyector externo con la tensión correcta. **No alimente una antena a una tensión superior a la indicada por su fabricante.**
+
+### A mano, sin servicios
+
+```bash
+navtexreceiver -h                              # todas las opciones
+navtexreceiver -p C                            # SDRplay, toma C, 518 y 490 kHz
+navtexreceiver -s rtlsdr                       # RTL-SDR, modo según el modelo
+navtexreceiver -s rtlsdr -u 125000000          # RTL-SDR con conversor de 125 MHz
+navtexreceiver -B hf                           # 4209,5 kHz
+navtexreceiver -f grabacion.wav                # descodificar una grabación
+navtexreceiver -n 1                            # receptor 1, con los ajustes de la web
+```
+
+En una terminal muestra cada carácter recibido; como servicio, solo lo importante (`-v` y `-q` lo fuerzan). Con `-d` graba además las muestras en un `.wav`, que luego se puede volver a descodificar con `-f`.
+
+## Posición por GPS
+
+La interfaz web lee la posición de gpsd: de serie, el del propio equipo (`127.0.0.1:2947`). Se cambia o se quita con `NAVTEX_GPSD` en `/etc/default/navtex`. El servidor solo lee; no envía nada al GPS.
+
+**Leo Bodnar LBE-1420.** Su puerto serie es a la vez salida NMEA y consola de órdenes: en cuanto recibe un carácter deja de emitir, hasta que se le envía `nmea`. gpsd sondea los puertos al arrancar y lo deja callado. Se evita arrancando gpsd en solo lectura, con `GPSD_OPTIONS="-n -b"` en `/etc/default/gpsd`. Si ya se ha callado:
+
+```bash
+sudo systemctl stop gpsd gpsd.socket
+printf 'nmea\r' | sudo tee /dev/ttyACM0 > /dev/null
+sudo systemctl start gpsd.socket gpsd
+```
+
+## Estaciones del mundo
+
+`web_server/build/estaciones.json` trae 263 estaciones: 170 en 518 kHz, 87 en 490 kHz y 6 en 4209,5 kHz.
+
+| Fuente | Qué aporta |
+| :--- | :--- |
+| UIT, «Coast stations participating in the NAVTEX services» (Tabla 4; coordinada con la OMI, GMDSS.1/Circ.21, 31-05-2017) | 518 y 490 kHz |
+| Wikipedia, «List of Navtex stations» (CC BY-SA 4.0), consultada el 22-11-2026 | 4209,5 kHz, que la tabla de la UIT no trae |
+
+Los datos de origen están en `tools/estaciones/`, y `python3 tools/estaciones/generar.py` los comprueba y genera el archivo. En NAVTEX la letra fija la hora de emisión; de las 257 estaciones de la UIT, 254 cumplen esa regla, y las otras tres se listan al generar.
+
+**Los datos de 518 y 490 kHz son de 2017 y pueden haber cambiado.** Sirven para orientarse; compruébelos con las publicaciones oficiales en vigor.
+
+## API
+
+Para que otro programa recoja los mensajes por la red. Todo en JSON y con las horas en UTC.
 
 | Dirección | Qué devuelve |
 | :--- | :--- |
-| `GET /api/messages?since=<id>&limit=<n>` | Los mensajes con identificador mayor que `since`, del más antiguo al más reciente, con el texto completo. Sin filtros de estación ni de tipo, y sin marcar nada como leído. `limit` de 1 a 500 (200 si no se indica). |
-| `GET /api/status` | Qué está haciendo el receptor: origen (`sdrplay`, `rtlsdr`, `file`), cuándo arrancó, última vez que recibió muestras (`receiver_alive`, cada minuto), último sincronismo en cada frecuencia, número de mensajes y último identificador. |
-
-Cada mensaje:
+| `GET /api/messages?since=<id>&limit=<n>` | Los mensajes con identificador mayor que `since`, del más antiguo al más reciente, con el texto completo. Sin filtros y sin marcar nada como leído. `limit` de 1 a 500 (200 si no se indica) |
+| `GET /api/status` | Versión, estado de cada receptor (`rx1.state`, `rx1.source`, `rx1.band`…), última vez que llegaron muestras, último sincronismo en cada frecuencia, número de mensajes y último identificador |
+| `GET /api/gps` | Posición, fijo, satélites y hora del GPS |
+| `GET /api/settings` | Ajustes de los receptores y de la posición |
 
 ```json
 {"id":5,"bbbb":"EE39","station":"E","subject":"E","number":39,"freq":490,
- "received":"2026-11-22T07:38:00Z","complete":false,"message":"ZCZC EE39\n062040 UTC NOV 21\n..."}
+ "received":"2026-11-22T07:38:00Z","complete":false,"unread":true,
+ "message":"ZCZC EE39\n062040 UTC NOV 21\n..."}
 ```
 
-El uso previsto es preguntar cada minuto con el último `id` recibido. Las horas van en UTC.
+`freq` vale 518, 490 o 4209 (por 4209,5 kHz). El uso previsto es preguntar cada minuto con el último `id` recibido.
 
-**NMEA 2000.** No existe un mensaje normalizado de NMEA 2000 para el texto de NAVTEX (el formato normalizado es la sentencia `NRX` de NMEA 0183). Este programa no inventa uno: los mensajes llegan al bus a través de S.A.T.-APRS+, que los recoge por esta API y los difunde con el resto de sus avisos.
+Los cambios (`/api/settings/<clave>/<valor>` y `/saveconfig/<ajuste>/<valor>`) solo se aceptan por `POST` y con la cabecera `X-Navtex`, de modo que otra página abierta en el mismo navegador no puede cambiar nada.
 
-### Fase 5 · interfaz web nueva, en español
+**NMEA 2000.** No existe un mensaje normalizado de NMEA 2000 para el texto de NAVTEX; el formato normalizado es la sentencia `NRX` de NMEA 0183. Este programa no inventa uno: los mensajes llegan al bus a través de S.A.T.-APRS+, que los recoge por esta API.
 
-La interfaz original venía compilada y sin su código fuente, así que no se podía traducir ni modificar. Se ha sustituido por una nueva (`web_server/build/`: `index.html`, `estilo.css`, `app.js`), escrita a mano y sin paso de compilación:
+## Seguridad
 
-- **Mensajes:** lista con el tema en claro, la primera línea del texto, la estación, la frecuencia y hace cuánto llegó; colores por importancia (salvamento, aviso meteorológico, aviso a los navegantes); marca de «nuevo» y de «cortado»; filtros por frecuencia y tema, búsqueda en el texto y opción de ver también lo que no se sigue.
-- **Estado del receptor:** si está recibiendo, con qué equipo, y el último sincronismo en 518 y en 490 kHz.
-- **Estaciones y temas:** por frecuencia. Los temas A, B, D y L no se pueden quitar, como en un receptor homologado.
-- Se ve bien en el móvil, sigue el modo claro u oscuro del equipo y **no carga nada de Internet**: funciona a bordo sin conexión.
-- Lo recibido por radio se muestra siempre como texto, nunca se interpreta, y el servidor prohíbe a la página cargar nada que no sea suyo.
+La interfaz no tiene contraseña: está pensada para la red local o la de a bordo. No la exponga a Internet.
 
-### Fase 6 · NAVTEX de onda corta (4209,5 kHz)
+- El servidor web y los receptores no se ejecutan como `root`; el servidor web va además encerrado en su carpeta.
+- Solo se sirven los archivos de la interfaz; no se puede pedir ninguno de fuera.
+- Los ajustes solo admiten claves y valores conocidos, y las consultas a la base de datos no se construyen con texto recibido.
+- Lo recibido por radio se muestra siempre como texto, y el navegador tiene prohibido cargar nada que no sea de la propia interfaz.
+- Con `navtexwebserver 8080 127.0.0.1` (o `WEB_ADDRESS=127.0.0.1`) escucha solo en el propio equipo.
 
-Además de 518 y 490 kHz, el receptor puede escuchar el canal de onda corta, **4209,5 kHz**, con la opción `-B hf`:
+## Solución de problemas
 
-```
-navtexreceiver -B hf                 # SDRplay
-navtexreceiver -s rtlsdr -B hf       # RTL-SDR (muestreo directo o conversor)
-```
+| Síntoma | Causa probable | Qué hacer |
+| :--- | :--- | :--- |
+| Receptor «Sin equipo» | Desconectado, o en uso por otro programa | `lsusb`; pare el otro programa. El receptor lo reintenta cada 15 s |
+| El RTL-SDR no aparece en `lsusb` | Puerto o cable; con `error -71` en `dmesg`, mal contacto o falta de alimentación | Otro puerto, sin alargador, o un concentrador con alimentación propia |
+| «Recibiendo» pero sin mensajes | Aún no ha emitido ninguna estación en alcance, o la antena no tiene alimentación | Mire las próximas emisiones en «Estaciones»; revise la alimentación de la antena |
+| Sin sincronismo en ninguna frecuencia tras varias horas | Antena, toma equivocada o ruido | Compruebe la toma de antena elegida y aleje la antena de fuentes de ruido |
+| «gpsd no contesta» | gpsd parado, o en otro equipo | `systemctl status gpsd`; `NAVTEX_GPSD` en `/etc/default/navtex` |
+| «sin posición · buscando satélites» que no se resuelve | El GPS no entrega datos | `cgps`; con un LBE-1420, véase [Posición por GPS](#posición-por-gps) |
+| La página no carga desde otro equipo | Cortafuegos | Abra el puerto 8080 a la red local |
 
-- **Un receptor escucha una banda o la otra.** 518 y 490 kHz van juntas porque están a 28 kHz; 4209,5 kHz queda a 3,7 MHz y no cabe en la misma sintonía. Para tener las tres a la vez hacen falta dos receptores, cada uno con su copia del programa.
-- En `/etc/default/navtex` se elige con `RECEIVER_OPTS`, por ejemplo `RECEIVER_OPTS="-p C -B hf"`.
-- Los mensajes se guardan con frecuencia `4209` y tienen sus propias estaciones y temas (`stations4209`, `messages4209`; de serie, todas las estaciones). La interfaz web los muestra como «4209,5 kHz», con su filtro y su ajuste.
-- `/api/status` dice la banda en uso (`band`: `mf` o `hf`) y el último sincronismo en ella (`phasing_4209`).
+## Créditos y licencia
 
-Sirve con antenas que cubren las tres frecuencias, como la JRC NAW-333 (518, 490 y 4209,5 kHz).
+- El receptor original, con el demodulador y el descodificador SITOR-B, es de **bartelvdh**: [bartelvdh/Navtex](https://github.com/bartelvdh/Navtex).
+- Los cambios de este fork son © 2026 Manuel - EA7JRS.
+- Todo bajo licencia MIT; véase [LICENSE](LICENSE).
+- `web_server/https_fileserver.c` parte de un ejemplo de libmicrohttpd (LGPL 2.1 o posterior) y conserva su aviso.
+- La tabla de 4209,5 kHz de `estaciones.json` procede de Wikipedia y se distribuye bajo CC BY-SA 4.0.
 
-Probado con una recepción real colocada en el canal de onda corta: se descodifica y se guarda como 4209,5 kHz, y lo que cae en el otro canal se ignora. **Sin probar con una emisión real en 4209,5 kHz.**
+## Apoya el proyecto
 
-### Fase 7 · dos receptores, horario, estaciones del mundo y aspecto
+Si te resulta útil: [paypal.me/ea7jrs](https://paypal.me/ea7jrs)
 
-**Dos receptores, ajustados desde la web.** Los servicios pasan a ser `navtex-receiver@1` y `navtex-receiver@2`. En la pestaña «Receptores» se elige para cada uno si está encendido, qué equipo usa (SDRplay o RTL-SDR), su toma de antena o su número de serie, y la banda. El receptor aplica los cambios en unos segundos, sin reiniciar el servicio ni tocar archivos. Con dos equipos se reciben las tres frecuencias a la vez.
-
-- El receptor 2 está siempre en marcha pero no toca ningún equipo hasta que se enciende en la web.
-- Si el receptor 1 comparte el SDRplay con SDRconnect o SDR++, sigue alternando con ellos (`sudo systemctl start navtex-receiver@1`).
-- Si un equipo está desconectado o en uso, el receptor lo dice y lo reintenta cada 15 segundos.
-- A mano sigue valiendo la línea de órdenes; `navtexreceiver -n 1` usa los ajustes de la web.
-
-**Banda por horario.** Con un solo equipo, la banda «Por horario» escucha 518 y 490 kHz y pasa a 4209,5 kHz en las horas UTC que se indiquen, desde un minuto antes hasta once después. Un botón toma las horas de las estaciones de onda corta que se siguen.
-
-**Estaciones del mundo.** `web_server/build/estaciones.json` trae 263 estaciones con su letra, posición, horas, alcance, idioma y estado. Indicando la posición propia (latitud y longitud, o un localizador), la pestaña «Estaciones» las ordena por distancia, marca las que quedan en alcance, permite seguirlas con un toque y enseña las próximas emisiones de las que se siguen.
-
-- Fuentes: la Tabla 4 de la UIT, «Coast stations participating in the NAVTEX services» (518 y 490 kHz; coordinada con la OMI, GMDSS.1/Circ.21, 31-05-2017), y la tabla de 4209,5 kHz de la lista de Wikipedia (CC BY-SA 4.0, consultada el 22-11-2026).
-- Los datos de origen están en `tools/estaciones/` y `generar.py` los comprueba y genera el archivo. De las 257 estaciones de la UIT, 254 siguen la regla de turnos (la letra fija la hora); las otras tres se listan al generar.
-- **Los datos son de 2017 y pueden haber cambiado.** Sirven para orientarse, no sustituyen a las publicaciones oficiales en vigor.
-
-**Aspecto.** Claro, oscuro o automático (el del equipo), con un selector en la cabecera; se recuerda en cada navegador.
-
-**Seguridad.** Los cambios (ajustes, estaciones y temas) solo se aceptan por POST y con una cabecera propia: otra página web abierta en el mismo navegador no puede cambiar nada.
-
-Probado: los ajustes y su validación; el cambio de banda por horario; el receptor sin equipo (reintenta sin salir); y la interfaz en un navegador (posición, estaciones en alcance, próximas emisiones, receptores y aspecto). **Sin probar con equipos reales**, y en particular dos receptores a la vez.
-
-### Fase 8 · posición por GPS
-
-La interfaz web toma la posición propia de **gpsd** (de serie, el del propio equipo, `127.0.0.1:2947`; se cambia o se quita con `NAVTEX_GPSD` en `/etc/default/navtex`).
-
-- Junto a la hora hay un recuadro con la posición del GPS como se lee en una carta, el localizador, el tipo de fijo, los satélites y la altitud.
-- La pestaña «Estaciones» usa esa posición para ordenar por distancia y marcar las que quedan en alcance; las listas se rehacen solas cuando el barco se ha movido más de una milla.
-- Si el GPS no da posición, o si se desmarca «Usar la posición del GPS», se usa la escrita a mano.
-- El servidor solo lee de gpsd; no envía nada al GPS. `GET /api/gps` da los mismos datos.
-
-Probado con un gpsd de pruebas que envía los mismos informes que el real (con fijo, sin gpsd y desactivado) y en un navegador. **Sin probar con el gpsd del equipo.**
-
-### Previsto
+## Previsto
 
 - Sentencias `NRX` de NMEA 0183 para equipos que las admitan.
