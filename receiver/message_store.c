@@ -12,6 +12,12 @@ extern char* strdup(const char*);
 
 #define TS_SIZE 20
 
+int navtex_verbose = 1;
+
+// An incomplete reception does not replace a complete copy of the same message
+// received less than this long ago (a station repeats its messages every 4 hours).
+#define KEEP_COMPLETE_COPY_AGE 60*60*24
+
 #define MESSAGE_PURGE_AGE 60*60*72  			//72 hours in seconds
 #define MESSAGE_WEAHTER_FCST_AGE_LIMIT 60*60*28  	//28 hours in seconds mark weather fcsts as old when reaching this age
 
@@ -64,6 +70,9 @@ void open_db(sqlite3 **db) {
                 return;
         }
         sqlite3_busy_timeout(*db, 5000);
+        // Databases created before the "complete" column existed get it now;
+        // the statement fails harmlessly when the column is already there.
+        sqlite3_exec(*db, "alter table messages add column complete integer default 1", NULL, NULL, NULL);
 }
 
 // Only these settings exist, and their values are lists of NAVTEX B1/B2 letters.
@@ -84,44 +93,65 @@ static int valid_config(const char *tag, const char *value) {
 }
 
 
-int add_message(char *bbbb, char *message, int freq) {
+int add_message(char *bbbb, char *message, int freq, int complete) {
         char timestamp_str[TS_SIZE];
-
         sqlite3 *db;
         sqlite3_stmt *stmt;
+        int rc;
+        int keep_existing = 0;
 
+        if (bbbb == NULL || message == NULL || strlen(bbbb) != 4 || message[0] == '\0') return -1;
 
         get_current_timestamp(timestamp_str);
-         
+
 	open_db(&db);
         if (db == NULL)
         {
                 printf("Failed to open DB\n");
                 return -1;
         }
-	sqlite3_prepare_v2(db, "delete from messages where bbbb = ?1 ", -1, &stmt, NULL);
+
+        // What is already stored for this message identity on this frequency?
+        if (sqlite3_prepare_v2(db, "select complete, length(message), timestamp from messages where bbbb = ?1 and freq = ?2 order by id desc limit 1", -1, &stmt, NULL) == SQLITE_OK) {
+                sqlite3_bind_text(stmt, 1, bbbb, -1, SQLITE_STATIC);
+                sqlite3_bind_int(stmt, 2, freq);
+                if (sqlite3_step(stmt) == SQLITE_ROW && sqlite3_column_text(stmt, 2) != NULL) {
+                        int old_complete = sqlite3_column_type(stmt, 0) == SQLITE_NULL ? 1 : sqlite3_column_int(stmt, 0);
+                        int old_len = sqlite3_column_int(stmt, 1);
+                        long age = calculate_time_difference((char *) sqlite3_column_text(stmt, 2));
+                        if (!complete && age < KEEP_COMPLETE_COPY_AGE &&
+                            (old_complete || old_len >= (int) strlen(message)))
+                                keep_existing = 1;   // a cut reception is not better than what we have
+                }
+                sqlite3_finalize(stmt);
+        }
+        if (keep_existing) {
+                sqlite3_close(db);
+                printf("%d kHz: %s received incomplete (%d characters), keeping the stored copy\n", freq, bbbb, (int) strlen(message));
+                return 0;
+        }
+
+	sqlite3_prepare_v2(db, "delete from messages where bbbb = ?1 and freq = ?2", -1, &stmt, NULL);
         sqlite3_bind_text(stmt, 1, bbbb, -1, SQLITE_STATIC);
+        sqlite3_bind_int(stmt, 2, freq);
 	sqlite3_step(stmt); 
         sqlite3_finalize(stmt);
 
-	sqlite3_prepare_v2(db, "insert into messages (bbbb,message,timestamp,age,freq) values ( ?1 , ?2 , ?3 ,'NEW',?4)", -1, &stmt, NULL);
+	sqlite3_prepare_v2(db, "insert into messages (bbbb,message,timestamp,age,freq,complete) values ( ?1 , ?2 , ?3 ,'NEW',?4,?5)", -1, &stmt, NULL);
         sqlite3_bind_text(stmt, 1, bbbb,          -1, SQLITE_STATIC);
         sqlite3_bind_text(stmt, 2, message,       -1, SQLITE_STATIC);
         sqlite3_bind_text(stmt, 3, timestamp_str, -1, SQLITE_STATIC);
         sqlite3_bind_int(stmt, 4, freq);
- 
-	if (sqlite3_step(stmt) == SQLITE_DONE) 
-	{ 
- 	       sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		return 0; 
-	}
-	else
-	{ 
-       		sqlite3_finalize(stmt);
-		sqlite3_close(db);
-		return -2; 
-	}
+        sqlite3_bind_int(stmt, 5, complete ? 1 : 0);
+        rc = sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+	sqlite3_close(db);
+        if (rc != SQLITE_DONE) {
+                printf("%d kHz: %s could not be stored\n", freq, bbbb);
+                return -2;
+        }
+        printf("%d kHz: %s stored, %s, %d characters\n", freq, bbbb, complete ? "complete" : "incomplete", (int) strlen(message));
+        return 0;
 }
 
 
@@ -144,7 +174,7 @@ cJSON *json = cJSON_CreateArray();
         }
 
         //sqlite3_prepare_v2(db, "select id,bbbb,timestamp,age,freq from messages order by timestamp desc", -1, &stmt, NULL);
-        sqlite3_prepare_v2(db, "select messages.id as id,bbbb,timestamp,age,freq from messages, config AS CO1, config AS CO2 where (freq=518 and CO1.tag='stations518' and instr(CO1.value,substr(bbbb,1,1))>0 and CO2.tag='messages518' and instr(CO2.value,substr(bbbb,2,1)) > 0) OR  (freq=490 and CO1.tag='stations490' and instr(CO1.value,substr(bbbb,1,1))>0 and CO2.tag='messages490' and instr(CO2.value,substr(bbbb,2,1)) > 0) order by timestamp desc", -1, &stmt, NULL);
+        sqlite3_prepare_v2(db, "select messages.id as id,bbbb,timestamp,age,freq,complete from messages, config AS CO1, config AS CO2 where (freq=518 and CO1.tag='stations518' and instr(CO1.value,substr(bbbb,1,1))>0 and CO2.tag='messages518' and instr(CO2.value,substr(bbbb,2,1)) > 0) OR  (freq=490 and CO1.tag='stations490' and instr(CO1.value,substr(bbbb,1,1))>0 and CO2.tag='messages490' and instr(CO2.value,substr(bbbb,2,1)) > 0) order by timestamp desc", -1, &stmt, NULL);
 
 
 

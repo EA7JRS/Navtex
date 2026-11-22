@@ -631,6 +631,8 @@ static void usage(const char *prog)
 "  -s source   sdrplay | rtlsdr | file   (default: sdrplay when built in, else rtlsdr)\n"
 "  -b          bias T on: power an active antenna through the coax\n"
 "  -d          debug: also write the received I/Q to a wav file\n"
+"  -v          print every received character (default on a terminal)\n"
+"  -q          only print events: phasing, messages stored (default as a service)\n"
 "SDRplay:\n"
 "  -p port     antenna port A, B or C (RSPdx, RSPdx-R2)\n"
 "RTL-SDR:\n"
@@ -660,8 +662,10 @@ int main(int argc, char *argv[])
 
   // line-buffered output, so the messages reach the journal as they happen
   setvbuf(stdout, NULL, _IOLBF, 0);
+  // character by character only when somebody is watching
+  navtex_verbose = isatty(STDOUT_FILENO) ? 1 : 0;
 
-  while ((c = getopt (argc, argv, "bdhts:p:i:S:D:u:g:P:f:")) != -1) {
+  while ((c = getopt (argc, argv, "bdhtvqs:p:i:S:D:u:g:P:f:")) != -1) {
     switch (c)
       {
       case 'b':
@@ -671,6 +675,12 @@ int main(int argc, char *argv[])
       case 'd':
         debug_mode=1;
 	printf("debug mode enabled, a wav file with the received IQ samples will be produced\n");
+        break;
+      case 'v':
+        navtex_verbose = 1;
+        break;
+      case 'q':
+        navtex_verbose = 0;
         break;
       case 'h':
         usage(argv[0]);

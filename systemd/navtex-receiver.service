@@ -1,0 +1,26 @@
+# Navtex receiver (EA7JRS/Navtex). Installed by tools/instalar-servicios.sh,
+# which replaces @USUARIO@ and adds the Conflicts= drop-in when other
+# programs share the receiver.
+[Unit]
+Description=NAVTEX receiver (518 and 490 kHz)
+# The SDRplay API service, when there is one, must be up first
+After=network.target sdrplay.service
+# Keep trying for as long as it takes: the receiver may be unplugged or in use
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=@USUARIO@
+SupplementaryGroups=plugdev
+EnvironmentFile=-/etc/default/navtex
+WorkingDirectory=/opt/Navtex
+ExecStart=/usr/local/bin/navtexreceiver -q $RECEIVER_OPTS
+# The receiver exits with an error when it cannot open or loses the radio
+Restart=on-failure
+RestartSec=15
+# SIGTERM makes it stop streaming and release the radio
+TimeoutStopSec=20
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

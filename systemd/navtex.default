@@ -1,0 +1,15 @@
+# /etc/default/navtex · ajustes de los servicios navtex-receiver y navtex-web
+# Tras cambiarlos:  sudo systemctl restart navtex-receiver navtex-web
+
+# Opciones del receptor (navtexreceiver -h las lista todas). Ejemplos:
+#   SDRplay, antena en la toma C:                 RECEIVER_OPTS="-p C"
+#   SDRplay, toma B con alimentación al coaxial:  RECEIVER_OPTS="-p B -b"
+#   RTL-SDR (Nooelec NESDR SMArt v5, Blog V3/V4): RECEIVER_OPTS="-s rtlsdr"
+#   RTL-SDR con conversor externo de 125 MHz:     RECEIVER_OPTS="-s rtlsdr -u 125000000"
+RECEIVER_OPTS=""
+
+# Interfaz web: puerto y dirección en la que escucha.
+#   0.0.0.0    cualquier equipo de la red (abra el puerto en el cortafuegos)
+#   127.0.0.1  solo este equipo
+WEB_PORT=8080
+WEB_ADDRESS=0.0.0.0

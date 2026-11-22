@@ -1,6 +1,6 @@
 PRAGMA foreign_keys=OFF;
 BEGIN TRANSACTION;
-CREATE TABLE IF NOT EXISTS "messages" (id integer primary key autoincrement,bbbb text,message text,timestamp text, age text, freq integer);
+CREATE TABLE IF NOT EXISTS "messages" (id integer primary key autoincrement,bbbb text,message text,timestamp text, age text, freq integer, complete integer default 1);
 CREATE TABLE config (id integer primary key autoincrement,tag text,value text);
 INSERT INTO config VALUES(1,'stations518','PSTV');
 INSERT INTO config VALUES(2,'messages518','ABCDEFL');

@@ -117,9 +117,37 @@ Grabaciones: 252 000 muestras por segundo centradas en 504 kHz, en `.wav` de 16 
 
 Probado: la cadena completa, desde el archivo de muestras hasta el texto, con dos recepciones reales de NAVTEX colocadas a la vez en 518 y 490 kHz, en los dos formatos de archivo. El origen RTL-SDR compila y enlaza con `librtlsdr` y falla con un mensaje claro si no hay equipo; **falta probarlo con un RTL-SDR real**. El origen SDRplay se ha reorganizado sin cambiar sus ajustes; **falta probarlo en un equipo con la API de SDRplay**.
 
+### Fase 3 · servicios y mensajes incompletos
+
+Servicios de systemd (`systemd/`, instalador `tools/instalar-servicios.sh`):
+
+```
+./configure && make && sudo make install
+sudo sh tools/instalar-servicios.sh
+```
+
+- `navtex-receiver` y `navtex-web` se ejecutan con su usuario, no como `root`. La interfaz web va además encerrada en su carpeta.
+- Los ajustes están en `/etc/default/navtex`: opciones del receptor (`RECEIVER_OPTS`), puerto y dirección de la interfaz web.
+- Si el receptor no está o se pierde, el servicio se reinicia solo cada 15 segundos hasta que vuelva.
+- **Receptor compartido.** Si en el equipo hay otros servicios que usan el mismo SDRplay (`sdrconnect`, `sdrpp-server`), el instalador los declara incompatibles con `navtex-receiver`: arrancar uno para el otro. En ese caso el receptor NAVTEX no arranca solo; se pone con `sudo systemctl start navtex-receiver` y se vuelve con `sudo systemctl start sdrconnect`. Con un RTL-SDR dedicado (`RECEIVER_OPTS="-s rtlsdr"`) no hay conflicto y arranca siempre.
+- `sudo sh tools/instalar-servicios.sh --quitar` los retira.
+
+Salida del receptor: en una terminal sigue mostrando cada carácter recibido; como servicio solo escribe lo que importa (sincronismo, comienzo de mensaje, mensaje guardado). `-v` y `-q` lo fuerzan.
+
+Mensajes:
+- Cada mensaje se guarda con una marca de completo o incompleto (columna `complete`, que también sale en `/messagelist`). Las bases de datos anteriores se actualizan solas.
+- Una recepción cortada ya no sustituye a una copia completa del mismo mensaje recibida en las últimas 24 horas, ni a otra incompleta más larga.
+- Un mensaje de 490 kHz ya no borra al de 518 kHz con el mismo identificador (y viceversa).
+- Si llega una cabecera nueva sin haber terminado el mensaje anterior, este se guarda como incompleto; antes los dos se mezclaban bajo el identificador del primero.
+
+Robustez:
+- Las líneas y los mensajes se acumulaban en búferes de 5000 caracteres sin comprobar el límite; ahora no se puede escribir fuera de ellos, llegue lo que llegue por radio.
+- Las expresiones de comienzo y fin de mensaje se compilaban de nuevo en cada línea recibida y no se liberaban: el receptor perdía memoria continuamente.
+
+Probado: la recepción cortada, con una grabación real seguida de ruido (se guarda como incompleta y, repetida, no duplica ni degrada); las reglas de guardado, sobre una base de datos del formato anterior; las unidades, con `systemd-analyze verify`. **Sin probar: el instalador en un equipo con systemd**, y un mensaje completo de principio a fin (las grabaciones reales disponibles no llegan al `NNNN`).
+
 ### Previsto
 
-- Servicios de systemd, sin `root` y en alternancia con otros programas que usen el mismo receptor.
 - Salida de los mensajes hacia S.A.T.-APRS+ y hacia NMEA 2000.
 - Interfaz web nueva, en español.
 

@@ -1,7 +1,33 @@
 #include "nav_b_sm.h"
 #include <stdbool.h>
 
-extern "C" int add_message(char *bbbb,char *message, int freq);
+extern "C" int add_message(char *bbbb,char *message, int freq, int complete);
+extern "C" int navtex_verbose;
+
+// Append to a fixed buffer without ever writing past its end: what arrives
+// over the air decides the length, so it cannot be trusted.
+static void safe_append(char *dst, size_t dst_size, const char *src, size_t src_len)
+{
+	size_t used = strlen(dst);
+	if (used + 1 >= dst_size) return;
+	if (src_len > dst_size - 1 - used) src_len = dst_size - 1 - used;
+	memcpy(dst + used, src, src_len);
+	dst[used + src_len] = '\0';
+}
+
+// The start and end of message patterns are compiled once (they used to be
+// compiled again for every received line and never released).
+static regex_t regex_som;
+static regex_t regex_eom;
+static bool regex_ready = false;
+
+static void prepare_regex()
+{
+	if (regex_ready) return;
+	regcomp(&regex_som,"(CZC|Z.ZC|ZC.C|ZCZ.) +([A-Z][A-Z])([0-9][0-9])",REG_EXTENDED); 	//Start of message
+	regcomp(&regex_eom,"NNN.*|N.NN.*|NN.N.*",REG_EXTENDED);					//End of message
+	regex_ready = true;
+}
 
 
 
@@ -43,10 +69,12 @@ void byte_state_machine::init()
 
 void byte_state_machine::message_abort()
 {
-	printf("message abort\n");
+	printf("%u kHz: reception lost%s\n", freq, message_reception_ongoing ? ", message kept as incomplete" : "");
    	if(message_reception_ongoing)
 	{
-		add_message(message_bbbb,message_buffer,freq);
+		// keep what was received, marked as incomplete
+		safe_append(message_buffer, sizeof(message_buffer), line_buffer, strlen(line_buffer));
+		add_message(message_bbbb,message_buffer,freq,0);
 	}
 	init();
 }
@@ -55,40 +83,47 @@ void byte_state_machine::message_abort()
 
 void byte_state_machine::message_line_out()
 {
-   regex_t     regex_som;
-   regex_t     regex_eom;
    regmatch_t  pmatch[4];
 
+		prepare_regex();
 		if(message_reception_ongoing)
 		{
-			strcat(message_buffer,line_buffer);
-			strcat(message_buffer,"\n");
-			printf("line added: %s\n",line_buffer);
+			safe_append(message_buffer, sizeof(message_buffer), line_buffer, strlen(line_buffer));
+			safe_append(message_buffer, sizeof(message_buffer), "\n", 1);
+			if (navtex_verbose) printf("line added: %s\n",line_buffer);
 		}
 
-                regcomp(&regex_som,"(CZC|Z.ZC|ZC.C|ZCZ.) +([A-Z][A-Z])([0-9][0-9])",REG_EXTENDED); 	//Start of message
 		if (regexec(&regex_som, line_buffer, 4, pmatch, 0) == 0)  // match with ZCZC 
 		{
-			strcpy(message_buffer,line_buffer);
-			strcat(message_buffer,"\n");
-			strncat(message_bbbb,line_buffer+pmatch[2].rm_so, pmatch[2].rm_eo - pmatch[2].rm_so);
-			strncat(message_bbbb,line_buffer+pmatch[3].rm_so, pmatch[3].rm_eo - pmatch[3].rm_so);
+			if(message_reception_ongoing)
+			{
+				// a new header before the end of the previous message: that one was cut short
+				size_t len = strlen(message_buffer);
+				size_t cut = strlen(line_buffer) + 1;
+				if (len >= cut) message_buffer[len - cut] = '\0';
+				add_message(message_bbbb,message_buffer,freq,0);
+			}
+			message_buffer[0]= '\0';
+			message_bbbb[0]= '\0';
+			safe_append(message_buffer, sizeof(message_buffer), line_buffer, strlen(line_buffer));
+			safe_append(message_buffer, sizeof(message_buffer), "\n", 1);
+			safe_append(message_bbbb, sizeof(message_bbbb), line_buffer+pmatch[2].rm_so, pmatch[2].rm_eo - pmatch[2].rm_so);
+			safe_append(message_bbbb, sizeof(message_bbbb), line_buffer+pmatch[3].rm_so, pmatch[3].rm_eo - pmatch[3].rm_so);
 			message_bbbb[4]='\0';
-			printf("============START OF MESSAGE============ \n");
+			printf("%u kHz: start of message %s\n", freq, message_bbbb);
    			message_reception_ongoing=true;
 		}
 		else
 		{
-                	regcomp(&regex_eom,"NNN.*|N.NN.*|NN.N.*",REG_EXTENDED);					//End of message
 			if (regexec(&regex_eom, line_buffer, 1, pmatch, 0) == 0)  //match with NNNN
 			{
 				if(message_reception_ongoing) 
 				{
-					add_message(message_bbbb,message_buffer,freq);
+					add_message(message_bbbb,message_buffer,freq,1);
 				}
 				message_buffer[0]= '\0';
 				message_bbbb[0]= '\0';
-				printf("============ END OF MESSAGE ============\n");
+				if (navtex_verbose) printf("============ END OF MESSAGE ============\n");
    				message_reception_ongoing=false;
 			}
 		}
@@ -103,8 +138,8 @@ void byte_state_machine::message_byte_out(unsigned char byte_in)
 	if (byte_in == '\0')
 	{
 	     // ERROR
-	     printf("*");
-	     strcat(line_buffer, "*");
+	     if (navtex_verbose) printf("*");
+	     safe_append(line_buffer, sizeof(line_buffer), "*", 1);
 	}
 	else if (code_to_ltrs[byte_in] == 'l')
 	{
@@ -130,16 +165,16 @@ void byte_state_machine::message_byte_out(unsigned char byte_in)
 	} 
 	else
 	{
-		printf(".");
+		if (navtex_verbose) printf(".");
  		if(byte_mode == BYTE_MODE_LETTERS)
 		{
-			strncat(line_buffer, (char *)&code_to_ltrs[byte_in], 1);
+			safe_append(line_buffer, sizeof(line_buffer), (char *)&code_to_ltrs[byte_in], 1);
 		}
 		else
 		{
-			strncat(line_buffer, (char *)&code_to_figs[byte_in], 1);
+			safe_append(line_buffer, sizeof(line_buffer), (char *)&code_to_figs[byte_in], 1);
 		}
-		printf(";");
+		if (navtex_verbose) printf(";");
 	}
 
 }
@@ -179,7 +214,7 @@ void byte_state_machine::receive_rxdx_byte(unsigned char byte_received)
 
 		if (byte_received == ph1)
 		{
-	       		printf("\n alpha received in DX position\n");
+	       		if (navtex_verbose) printf("\n alpha received in DX position\n");
 			if(previous_DX_was_alpha)
 			{
 				end_of_emission_counter++;
@@ -256,7 +291,7 @@ void byte_state_machine::receive_rxdx_byte(unsigned char byte_received)
         if(error_count > ERROR_THRESHOLD) 
 	{
                 message_byte_out('\0');
-		printf("\n error th exceeded \n");
+		if (navtex_verbose) printf("\n error th exceeded \n");
 		message_abort();
 	}
 }
@@ -290,7 +325,7 @@ void byte_state_machine::receive_bit(char bit_received)
       phase_det_disable_timer--; 
 	if(phase_det_disable_timer ==0) 
 	{
-		printf("phase det disable timer expired\n");
+		if (navtex_verbose) printf("phase det disable timer expired\n");
 	}
    }
    else 
@@ -622,7 +657,7 @@ void byte_state_machine::receive_bit(char bit_received)
 			byte_reception_enabled = true;
 			bits_received = 0;
                         temp_byte = 0x00;
-                        printf("phasing detected\n");
+                        printf("%u kHz: phasing detected\n", freq);
 			phase_det_disable_timer = PHASE_DETECTION_DIS_TIMER_VALUE; 
 		}
 		status = STAT_INIT;
