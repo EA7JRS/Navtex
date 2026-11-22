@@ -291,7 +291,7 @@
       $('sinc-' + f).textContent = isFinite(t) ? haceCuanto(t, ahora) : tr('todavía ninguno');
       $('sinc-' + f + '-detalle').textContent = tr('último sincronismo');
     });
-    if (typeof estado.version === 'string') $('version').textContent = 'v' + estado.version;
+    if (typeof estado.version === 'string') { $('version').textContent = 'v' + estado.version; $('version-cabecera').textContent = 'v' + estado.version; }
     $('hora-utc-detalle').textContent = (estado.messages || 0) + (estado.messages === 1 ? tr(' mensaje guardado') : tr(' mensajes guardados'));
   }
 

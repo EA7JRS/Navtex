@@ -4,6 +4,7 @@ Fork EA7JRS/Navtex del receptor NAVTEX de bartelvdh. Las entradas dicen también
 
 ## [1.7.3] - 2026-11-22
 
+- **Cabecera como la de APRS LoRa+**: su logotipo, la versión bajo el nombre y la raya de verde a cian.
 - **Aviso de clima espacial**: S.A.T.-APRS+ 1.52.0 manda las escalas oficiales de la NOAA (ajuste nuevo `space.wx`); con un apagón de radio (R) o una tormenta geomagnética (G) en las últimas tres horas, la página lo avisa arriba, porque afecta a 4209,5 kHz y a la recepción nocturna lejana. Sin S.A.T.-APRS+ no cambia nada. Sin probar con un aviso real.
 
 ## [1.7.2] - 2026-11-22
