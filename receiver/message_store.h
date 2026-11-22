@@ -45,3 +45,4 @@ int pending_alarms(void);
 int acknowledge_alarms(void);
 /* Tag a message for permanent retention (keep = 1) or remove the tag */
 int set_keep(unsigned int id, int keep);
+int get_config_value(const char *tag, char *out, size_t out_size);

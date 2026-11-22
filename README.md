@@ -8,7 +8,7 @@ Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.c
 
 ![Mensajes recibidos, en aspecto oscuro](docs/img/mensajes.png)
 
-*Las capturas muestran mensajes de ejemplo, cargados para ilustrar la pantalla.*
+*Las capturas son de un equipo de pruebas sin receptor conectado. Los mensajes GA12 y GB20 son de muestra y lo dicen en su texto; el EE39 está descodificado de una grabación real.*
 
 > **Aviso.** Este programa es una ayuda. No sustituye a un receptor NAVTEX homologado donde este sea obligatorio, ni a las publicaciones oficiales.
 
@@ -110,6 +110,8 @@ Registro en vivo: `journalctl -u 'navtex-receiver@*' -f`
 
 **Aspecto.** El botón de al lado abre el mismo menú que la WebUI del tracker APRS LoRa+:
 
+![El menú de aspecto](docs/img/aspecto.png)
+
 | Modo | Qué hace |
 | :--- | :--- |
 | Sistema | El del equipo (de serie) |
@@ -123,7 +125,7 @@ Lista con el tema en claro, la primera línea del texto, la estación, la frecue
 
 ### Estaciones
 
-![Estaciones ordenadas por distancia, con la posición del GPS](docs/img/estaciones.png)
+![Estaciones ordenadas por distancia a la posición propia](docs/img/estaciones.png)
 
 - **Mi posición:** la del GPS si lo hay; si no, la que se escriba (latitud y longitud en grados decimales, o un localizador).
 - **Por frecuencia:** las estaciones de la más cercana a la más lejana, con su letra, alcance, idioma y próxima emisión, y cuáles quedan en alcance. Se siguen con un toque, o todas las que están en alcance de una vez.
@@ -302,6 +304,16 @@ Total de sentencias, número de sentencia, número de mensaje (00–99), identid
 
 En las dos, ninguna sentencia pasa de 82 caracteres y los caracteres reservados van como `^hh`.
 
+**Estaciones y temas desde otro equipo.** Por el servidor TCP se admite la sentencia `NRM` de la norma (IEC 61097-6, anexo C.2) y su consulta:
+
+| Se recibe | Qué hace |
+| :--- | :--- |
+| `$--CRQ,NRM*hh` | Contesta con una `NRM` por frecuencia: qué estaciones y temas se siguen |
+| `$--NRM,1,f,estaciones,temas*hh` | Cambia las estaciones y los temas que se siguen en esa frecuencia. Los temas A, B, D y L no se pueden quitar |
+| `$--NRM,0,f,estaciones,temas*hh` | Manda los mensajes guardados de esa frecuencia que encajan, en sentencias `NRX`. No cambia nada |
+
+`f` es 1 para 490 kHz, 2 para 518 kHz y 3 para 4209,5 kHz. Estaciones y temas son ocho cifras hexadecimales; el bit menos significativo es la letra A. Las funciones 2 y 3 de la norma (lo que sale por la impresora y por el puerto de datos) no existen aquí.
+
 **Alarma.** Mientras haya un mensaje de búsqueda y salvamento sin reconocer, sale cada 30 segundos `$CRALR,hhmmss.00,003,A,V,NAVTEX: Search and rescue information*hh`; al reconocerla, una vez más con `V,A`. Por el servidor TCP se puede reconocer con `$--ACK,003*hh`.
 
 Se ajusta en la pestaña Receptores:
@@ -309,7 +321,7 @@ Se ajusta en la pestaña Receptores:
 - **UDP**: destino `equipo:puerto` (vale la dirección de difusión de la red, por ejemplo `192.168.1.255:10110`). Una sentencia por datagrama.
 - **TCP**: puerto de un servidor al que se conectan los programas (hasta 8 a la vez).
 
-Solo salen los mensajes que llegan desde que se enciende la salida, no los ya guardados. La salida no tiene contraseña; de quien se conecta por TCP solo se atiende la sentencia `ACK` de la alarma.
+Solo salen los mensajes que llegan desde que se enciende la salida, no los ya guardados. La salida no tiene contraseña; de quien se conecta por TCP solo se atienden las sentencias `ACK`, `NRM` y `CRQ`. Con ellas se puede apagar la alarma y cambiar qué estaciones y temas se siguen, igual que desde la interfaz web: úsela solo en una red de confianza.
 
 **NMEA 2000.** No existe un mensaje normalizado de NMEA 2000 para el texto de NAVTEX; la salida normalizada es la sentencia `NRX` de NMEA 0183. Este programa no inventa uno: al bus llegan a través de S.A.T.-APRS+, que los recoge por la API.
 
@@ -350,4 +362,3 @@ Si te resulta útil: [paypal.me/ea7jrs](https://paypal.me/ea7jrs)
 ## Previsto
 
 - Las sentencias de gestión de alertas del puente (MSC.508(105), 9.4; IEC 62923).
-- La sentencia `NRM` de IEC 61097-6 (elegir estaciones y temas desde otro equipo).

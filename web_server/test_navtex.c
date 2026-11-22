@@ -270,6 +270,27 @@ main (void)
     CHECK (checksum_ok (alr), "ALR checksum");
     CHECK (is_alarm_ack ("$IIACK,003*56\r\n") && !is_alarm_ack ("$IIACK,003*00\r\n") && !is_alarm_ack ("$IIACK,004*51\r\n") && !is_alarm_ack ("ACK,003") && !is_alarm_ack (""), "ACK sentence");
   }
+  /* --- NRM, with the two examples of IEC 61097-6, annex C.2 */
+  {
+    int function = -1, freq = 0;
+    unsigned long areas = 0, types = 0;
+    char letters[27], out[64];
+    CHECK (nrm_parse ("$INNRM,2,1,00001E1F,00000023*57", &function, &freq, &areas, &types) && function == 2 && freq == 490, "NRM: the first example of the standard");
+    mask_to_letters (types, letters);
+    CHECK (strcmp (letters, "ABF") == 0, "its message types are A, B and F, as the standard says");
+    mask_to_letters (areas, letters);
+    CHECK (strcmp (letters, "ABCDEJKLM") == 0 && letters_to_mask (letters) == 0x1E1FUL, "areas, letters and back");
+    CHECK (nrm_parse ("$INNRM,0,2,00001E1F,0FFFFFFF*21", &function, &freq, &areas, &types) && function == 0 && freq == 518 && types == 0x3FFFFFFUL, "NRM: the second example, a request for stored messages; its reserved bits are dropped");
+    CHECK (!nrm_parse ("$INNRM,2,1,00001E1F,00000023*58", &function, &freq, &areas, &types) && !nrm_parse ("$INNRM,1,4,00000001,00000001*53", &function, &freq, &areas, &types)
+           && !nrm_parse ("$INNRM,1,2,1E1F,23*00", &function, &freq, &areas, &types), "bad checksum, frequency or width: refused");
+    nrm_sentence (out, sizeof (out), 1, 4209, letters_to_mask ("GX"), letters_to_mask ("ABDL"));
+    CHECK (strncmp (out, "$CRNRM,1,3,00800040,0000080B*", 29) == 0, "NRM written");
+    out[strlen (out) - 2] = '\0';
+    CHECK (checksum_ok (out) && nrm_parse (out, &function, &freq, &areas, &types) && freq == 4209 && areas == letters_to_mask ("GX"), "and read back");
+    CHECK (is_nrm_query ("$INCRQ,NRM*3A\r\n") && !is_nrm_query ("$INCRQ,NRX*2F\r\n") && !is_nrm_query ("$INCRQ,NRM*00"), "CRQ query");
+    CHECK (update_config ("stations518", "GX") == 0 && get_config_value ("stations518", letters, sizeof (letters)) && strcmp (letters, "GX") == 0, "followed stations read back");
+  }
+
   /* --- tagged for permanent retention (IMO MSC.508(105), 6.1.2) */
   add_message ("GA40", "ZCZC GA40\nTEST. KEEP THIS ONE.\n", 518, 1);
   m = listed ("GA40", &j); i = cJSON_GetObjectItem (m, "id")->valueint; cJSON_Delete (j);

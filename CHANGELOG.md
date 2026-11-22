@@ -2,6 +2,19 @@
 
 Fork EA7JRS/Navtex del receptor NAVTEX de bartelvdh. Las entradas dicen también qué se probó y qué no. Lo descrito en una fase puede haber cambiado en las posteriores (por ejemplo, los servicios y sus ajustes): el estado actual es el del [README](README.md).
 
+## [1.6.0] - 2026-11-22
+
+### Sentencia NRM, regla de las 24 horas y un fallo de la alarma
+
+- **Corregido:** el aviso rojo de la alarma se veía siempre, vacío, aunque no hubiera ningún mensaje de búsqueda y salvamento sin reconocer (fallo de las versiones 1.3.0 a 1.5.0: una regla de la hoja de estilos anulaba el ocultado). Lo mismo pasaba con los botones de guardar y borrar cuando no había mensajes.
+- **Sentencia `NRM`** (IEC 61097-6, anexo C.2) por el servidor TCP: consultar qué estaciones y temas se siguen (`CRQ`), cambiarlos, y pedir los mensajes guardados como sentencias `NRX`. Con ella están las cuatro sentencias que la norma pide como mínimo: `NRX`, `NRM`, `ALR` y `ACK`. Los temas A, B, D y L tampoco se pueden quitar por esta vía.
+- **Mensajes nuevos:** la marca de «nuevo» se quita al abrir el mensaje o a las 24 horas (MSC.508(105), 5.2.1).
+- Capturas del README rehechas con la interfaz actual. Los mensajes que enseñan son de muestra y lo dicen en su texto, salvo el EE39, descodificado de una grabación real.
+- `make check`: 103 comprobaciones, con los dos ejemplos de `NRM` de la norma.
+- Probado con el programa real: consulta, cambio y petición por TCP con `nc`. No probado con otro equipo que hable `NRM`.
+
+---
+
 ## [1.5.0] - 2026-11-22
 
 ### Normas al día: MSC.508(105) y Manual NAVTEX de 2023

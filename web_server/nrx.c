@@ -8,8 +8,9 @@
  * sentence of NMEA 0183 / IEC 61162-1 (IMO MSC.508(105), 9: "at least one
  * interface for the transfer of received data to other navigation or
  * communication equipment"). The sentences go out by UDP and to the clients
- * of a small TCP server. The only thing taken from those clients is the ACK
- * sentence that resets the search and rescue alarm.
+ * of a small TCP server. From those clients only three sentences are taken:
+ * ACK (resets the search and rescue alarm), NRM (stations and subjects
+ * followed, or a request for the stored messages) and its query, CRQ.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -182,6 +183,83 @@ is_alarm_ack (const char *text)
   return 0;
 }
 
+/* ------------------------------------------------------------ NRM and CRQ */
+
+/* Length of the sentence that starts at p ("$...*hh") when its checksum is right, else 0 */
+static size_t
+valid_sentence (const char *p)
+{
+  unsigned char sum = 0;
+  unsigned int given = 0;
+  const char *q;
+
+  if (*p != '$') return 0;
+  for (q = p + 1; *q != '\0' && *q != '*' && *q != '\r' && *q != '\n' && q - p < 80; q++) sum ^= (unsigned char) *q;
+  if (*q != '*' || sscanf (q + 1, "%2X", &given) != 1 || given != sum) return 0;
+  return (size_t) (q - p) + 3;
+}
+
+unsigned long
+letters_to_mask (const char *letters)
+{
+  unsigned long m = 0;
+  for (; *letters != '\0'; letters++)
+    if (*letters >= 'A' && *letters <= 'Z') m |= 1UL << (*letters - 'A');
+  return m;
+}
+
+void
+mask_to_letters (unsigned long mask, char *out)
+{
+  int i, n = 0;
+  for (i = 0; i < 26; i++)
+    if (mask & (1UL << i)) out[n++] = (char) ('A' + i);
+  out[n] = '\0';
+}
+
+int
+nrm_parse (const char *sentence, int *function, int *freq, unsigned long *areas, unsigned long *types)
+{
+  int f, index;
+  unsigned long a, t;
+  char end;
+
+  if (valid_sentence (sentence) == 0 || strncmp (sentence + 3, "NRM,", 4) != 0) return 0;
+  /* exactly: one digit, one digit, eight hex digits, eight hex digits */
+  if (sscanf (sentence + 7, "%1d,%1d,%8lx,%8lx%c", &f, &index, &a, &t, &end) != 5 || end != '*') return 0;
+  if (strspn (sentence + 11, "0123456789ABCDEFabcdef") != 8 || strspn (sentence + 20, "0123456789ABCDEFabcdef") != 8) return 0;
+  if (index < 1 || index > 3) return 0;
+  /* bits 26-31 are reserved; the standard's own example sets some of them, so they are just dropped */
+  a &= 0x3ffffffUL;
+  t &= 0x3ffffffUL;
+  *function = f;
+  *freq = index == 1 ? 490 : index == 2 ? 518 : 4209;
+  *areas = a;
+  *types = t;
+  return 1;
+}
+
+void
+nrm_sentence (char *out, size_t out_size, int function, int freq, unsigned long areas, unsigned long types)
+{
+  char body[48];
+  unsigned char sum = 0;
+  size_t i;
+
+  snprintf (body, sizeof (body), "CRNRM,%d,%d,%08lX,%08lX", function, freq == 490 ? 1 : freq == 4209 ? 3 : 2, areas & 0x3ffffffUL, types & 0x3ffffffUL);
+  for (i = 0; body[i] != '\0'; i++) sum ^= (unsigned char) body[i];
+  snprintf (out, out_size, "$%s*%02X\r\n", body, sum);
+}
+
+int
+is_nrm_query (const char *text)
+{
+  const char *p;
+  for (p = text; (p = strchr (p, '$')) != NULL; p++)
+    if (valid_sentence (p) == 13 && strncmp (p + 3, "CRQ,NRM", 7) == 0) return 1;
+  return 0;
+}
+
 char *
 nrx_sentences (const char *bbbb, int freq, const char *received, const char *message, int iec, int seq, int complete)
 {
@@ -331,6 +409,91 @@ serve_tcp (int port)
     }
 }
 
+static const int FREQS[3] = { 490, 518, 4209 };
+static const char *FREQ_TAG[3] = { "490", "518", "4209" };
+static int out_iec, out_seq;         /* form of the NRX sentences, and the next message number */
+
+/* The mask of what is followed on one frequency, as the web interface keeps it */
+static void
+followed (int k, unsigned long *areas, unsigned long *types)
+{
+  char tag[24], letters[40];
+  snprintf (tag, sizeof (tag), "stations%s", FREQ_TAG[k]);
+  get_config_value (tag, letters, sizeof (letters));
+  *areas = letters_to_mask (letters);
+  snprintf (tag, sizeof (tag), "messages%s", FREQ_TAG[k]);
+  get_config_value (tag, letters, sizeof (letters));
+  /* categories A, B, D and L cannot be excluded (IEC 61097-6, 4.3.7) */
+  *types = letters_to_mask (letters) | letters_to_mask ("ABDL");
+}
+
+/* What a client may ask with NRM and CRQ (IEC 61097-6, annex C.2) */
+static void
+answer_client (int fd, const char *said)
+{
+  const char *p;
+  char line[64];
+  int k;
+
+  if (is_nrm_query (said))
+    for (k = 0; k < 3; k++)
+      {
+        unsigned long areas, types;
+        followed (k, &areas, &types);
+        nrm_sentence (line, sizeof (line), 1, FREQS[k], areas, types);
+        send (fd, line, strlen (line), MSG_NOSIGNAL);
+      }
+  for (p = said; (p = strchr (p, '$')) != NULL; p++)
+    {
+      int function, freq;
+      unsigned long areas, types;
+      char letters[27], tag[24];
+
+      if (!nrm_parse (p, &function, &freq, &areas, &types)) continue;
+      k = freq == 490 ? 0 : freq == 518 ? 1 : 2;
+      if (function == 1)
+        {
+          /* the storage mask: here, the stations and subjects that are followed */
+          mask_to_letters (areas, letters);
+          snprintf (tag, sizeof (tag), "stations%s", FREQ_TAG[k]);
+          update_config (tag, letters);
+          mask_to_letters (types | letters_to_mask ("ABDL"), letters);
+          snprintf (tag, sizeof (tag), "messages%s", FREQ_TAG[k]);
+          update_config (tag, letters);
+          printf ("NRX: a TCP client set the stations and subjects followed on %s kHz\n", FREQ_TAG[k]);
+          fflush (stdout);
+          followed (k, &areas, &types);
+          nrm_sentence (line, sizeof (line), 1, freq, areas, types);
+          send (fd, line, strlen (line), MSG_NOSIGNAL);
+        }
+      else if (function == 0)
+        {
+          /* the stored messages that match the mask, as NRX sentences; no mask is changed */
+          char *ml = get_messages_since (0, 500);
+          cJSON *list = ml != NULL ? cJSON_Parse (ml) : NULL, *m;
+          cJSON_ArrayForEach (m, list)
+            {
+              cJSON *bbbb = cJSON_GetObjectItemCaseSensitive (m, "bbbb");
+              cJSON *f = cJSON_GetObjectItemCaseSensitive (m, "freq");
+              cJSON *rec = cJSON_GetObjectItemCaseSensitive (m, "received");
+              cJSON *text = cJSON_GetObjectItemCaseSensitive (m, "message");
+              char when[20];
+              char *s;
+              if (!cJSON_IsString (bbbb) || strlen (bbbb->valuestring) != 4 || !cJSON_IsNumber (f) || (int) f->valuedouble != freq || !cJSON_IsString (rec) || !cJSON_IsString (text)) continue;
+              if (bbbb->valuestring[0] < 'A' || bbbb->valuestring[0] > 'Z' || bbbb->valuestring[1] < 'A' || bbbb->valuestring[1] > 'Z') continue;
+              if (!(areas & (1UL << (bbbb->valuestring[0] - 'A'))) || !(types & (1UL << (bbbb->valuestring[1] - 'A')))) continue;
+              snprintf (when, sizeof (when), "%.10s %.5s", rec->valuestring, strlen (rec->valuestring) >= 16 ? rec->valuestring + 11 : "");
+              s = nrx_sentences (bbbb->valuestring, freq, when, text->valuestring, out_iec, out_seq, !cJSON_IsFalse (cJSON_GetObjectItemCaseSensitive (m, "complete")));
+              out_seq = (out_seq + 1) % 100;
+              if (s != NULL) { send (fd, s, strlen (s), MSG_NOSIGNAL); free (s); }
+            }
+          cJSON_Delete (list);
+          free (ml);
+        }
+      /* functions 2 and 3 (printer and INS masks) do not exist here: nothing to do */
+    }
+}
+
 /* A client that hung up, or that does not read, is dropped */
 static void
 send_tcp (const char *text, size_t n)
@@ -347,6 +510,7 @@ send_tcp (const char *text, size_t n)
         {
           said[r] = '\0';
           if (is_alarm_ack (said) && acknowledge_alarms () > 0) { printf ("NRX: alarm acknowledged by a TCP client\n"); fflush (stdout); }
+          answer_client (clients[i], said);
         }
       if (r == 0 || (r < 0 && errno != EAGAIN && errno != EWOULDBLOCK) ||
           (text != NULL && send (clients[i], text, n, MSG_NOSIGNAL) != (ssize_t) n))
@@ -417,7 +581,7 @@ static void *
 sender (void *arg)
 {
   int i;
-  int seq = 0, alarm_was = 0;
+  int alarm_was = 0;
   time_t last_alr = 0;
   (void) arg;
   for (i = 0; i < MAX_CLIENTS; i++) clients[i] = -1;
@@ -432,6 +596,7 @@ sender (void *arg)
       get_setting ("nrx.tcp", tcp, sizeof (tcp));
       get_setting ("nrx.format", format, sizeof (format));
       iec = strcmp (format, "iec") == 0;
+      out_iec = iec;
       port = atoi (tcp);
       serve_tcp (port);
       send_tcp (NULL, 0);
@@ -458,8 +623,8 @@ sender (void *arg)
           if ((udp[0] == '\0' && port == 0) || !cJSON_IsString (bbbb) || !cJSON_IsNumber (freq) || !cJSON_IsString (rec) || !cJSON_IsString (text)) continue;
           /* "2026-11-22T07:12:00Z" -> "2026-11-22 07:12" */
           snprintf (when, sizeof (when), "%.10s %.5s", rec->valuestring, strlen (rec->valuestring) >= 16 ? rec->valuestring + 11 : "");
-          s = nrx_sentences (bbbb->valuestring, (int) freq->valuedouble, when, text->valuestring, iec, seq, !cJSON_IsFalse (complete));
-          seq = (seq + 1) % 100;
+          s = nrx_sentences (bbbb->valuestring, (int) freq->valuedouble, when, text->valuestring, iec, out_seq, !cJSON_IsFalse (complete));
+          out_seq = (out_seq + 1) % 100;
           if (s == NULL) continue;
           set_error (NULL, NULL);
           if (udp[0] != '\0') send_udp (udp, s);

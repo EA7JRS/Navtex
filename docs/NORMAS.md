@@ -1,6 +1,6 @@
 # Navtex · Normas y reglamentos
 
-© 2026 Manuel - EA7JRS · versión 1.5.0 · ediciones comprobadas el 22 de noviembre de 2026
+© 2026 Manuel - EA7JRS · versión 1.6.0 · ediciones comprobadas el 22 de noviembre de 2026
 
 Este documento dice qué normas contempla el programa, qué aplica de cada una y qué no. Sirve para saber hasta dónde se puede confiar en él y para revisar el código contra el texto de cada norma.
 
@@ -15,7 +15,7 @@ Este documento dice qué normas contempla el programa, qué aplica de cada una y
 | Resolución MSC.508(105) de la OMI (2022) | Normas de funcionamiento para recibir información de seguridad marítima por MF (NAVTEX) y HF. **Es la vigente:** se aplica a los equipos instalados desde el 1 de enero de 2024 | Tasa de errores, memoria de identidades y de mensajes, mensajes marcados para conservarlos, asterisco, alerta de búsqueda y salvamento, interfaz de datos |
 | Resolución MSC.148(77) de la OMI (2003), enmendada por MSC.430(98) | La norma anterior, para equipos instalados entre 2005 y 2023 | Coincide con la vigente en la tasa de errores, la memoria de identidades, el asterisco, la alarma y la interfaz de datos |
 | Manual NAVTEX de la OMI, edición de 2023 (MSC.1/Circ.1403/Rev.2) | Organización del servicio: turnos, temas, prioridades | Turnos de emisión por letra, temas A, B, D y L, número 00 |
-| IEC 61097-6, edición 2.2 (2005 con las enmiendas de 2011 y 2019) | Requisitos y ensayos del receptor NAVTEX del SMSSM | Sentencias `NRX`, `ALR` y `ACK`; alarma de búsqueda y salvamento |
+| IEC 61097-6, edición 2.2 (2005 con las enmiendas de 2011 y 2019) | Requisitos y ensayos del receptor NAVTEX del SMSSM | Sentencias `NRX`, `NRM`, `ALR` y `ACK`, las cuatro que pide como mínimo; alarma de búsqueda y salvamento |
 | IEC 61162-1 (NMEA 0183) | Interfaz serie entre equipos marinos | Forma de las sentencias: suma de control, longitud, caracteres reservados |
 | Reglamento de Radiocomunicaciones de la UIT, edición de 2024 | Atribución de frecuencias | Solo recepción, en 490 kHz, 518 kHz y 4209,5 kHz |
 | Convenio SOLAS, capítulo IV | Obligación de llevar receptor NAVTEX | No se aplica: el programa no sirve para cumplirla |
@@ -50,7 +50,7 @@ Este documento dice qué normas contempla el programa, qué aplica de cada una y
 | El usuario puede marcar mensajes para conservarlos siempre, hasta un 25 % de la memoria; las marcas se pueden quitar | MSC.508(105), 6.1.2 | Botón «Conservar siempre» en cada mensaje. Hasta 50, la cuarta parte de los 200 de la norma. Un mensaje conservado no se borra al cumplir el tiempo de conservación ni lo sustituye otro posterior con el mismo número |
 | El usuario no debe poder borrar mensajes de la memoria | MSC.508(105), 6.1.1 | **No se cumple, a propósito:** el programa permite borrar un mensaje o todos. El borrado solo lo oculta: la identidad se sigue recordando 72 horas |
 | Con la memoria llena se sobrescribe el más antiguo | MSC.508(105), 6.1.1 | No hay memoria que se llene: los mensajes se quitan por tiempo, nunca antes de 72 horas |
-| Un mensaje nuevo sigue a la vista hasta que se reconoce o pasan 24 horas | MSC.508(105), 5.2.1 | **Parcial:** queda marcado como «nuevo» hasta que se abre, sin límite de 24 horas |
+| Un mensaje nuevo sigue a la vista hasta que se reconoce o pasan 24 horas | MSC.508(105), 5.2.1 | Queda marcado como «nuevo» hasta que se abre o pasan 24 horas |
 | Estaciones y temas no se pierden con un corte de alimentación de menos de 6 horas | MSC.508(105), 6.3 | Se guardan en disco: no se pierden |
 | Un receptor en 518 kHz y un segundo receptor en al menos otras dos frecuencias NAVTEX | MSC.508(105), 4.1.1 | 518 y 490 kHz a la vez con un receptor; 4209,5 kHz con el mismo por horario o con un segundo receptor |
 | Un medio para comprobar que el receptor y la memoria funcionan | MSC.508(105), 8 | **Parcial:** estado de cada receptor y último sincronismo en la interfaz; `make check` para las reglas y la memoria; se puede descodificar una grabación (`-s file`) |
@@ -79,7 +79,8 @@ De las 257 estaciones de la tabla de la UIT, 254 siguen la regla de la letra; la
 | La alarma de búsqueda y salvamento se comunica con la sentencia `ALR` (alarma 003), cada 30 s hasta que se reconoce | IEC 61097-6, 4.3.9.2, 4.3.9.3 y tabla 1 | `$CRALR,hhmmss.00,003,A,V,NAVTEX: Search and rescue information` |
 | La alarma se puede apagar con la sentencia `ACK` | IEC 61097-6, 8.4.2 | Por el servidor TCP: `$--ACK,003` |
 | Suma de control, longitud máxima de 82 caracteres, caracteres reservados como `^hh` | IEC 61162-1 | Comprobado en `make check`; la suma de control se contrasta con el ejemplo de IEC 61097-6 |
-| Sentencia `NRM` para elegir estaciones y temas desde otro equipo | IEC 61097-6, anexo C | **No hecho** |
+| Sentencia `NRM` para ver y elegir estaciones y temas desde otro equipo, y para pedir los mensajes guardados; consulta con `CRQ` | IEC 61097-6, anexo C.2 y 4.4 | Por el servidor TCP: máscara de lo guardado (función 1) y petición de mensajes (función 0). **Parcial:** las máscaras de impresora y de puerto de datos (funciones 2 y 3) no existen; todo lo recibido se guarda y sale, y la máscara decide lo que se enseña |
+| No se pueden excluir los temas A, B, D y L | IEC 61097-6, 4.3.7 | Tampoco por `NRM`: se añaden siempre |
 | Interfaz de gestión de alertas del puente | MSC.508(105), 9.4, que remite a MSC.302(87) | **No hecho.** La alerta sale con las sentencias `ALR` y `ACK`, que son las de la edición de 2005 de IEC 61097-6. La gestión de alertas del puente usa otras sentencias (IEC 62923), y la enmienda de 2019 de IEC 61097-6 no se ha podido consultar |
 | Interfaz para impresora, si no la lleva integrada | MSC.508(105), 9.3 | No hay; los mensajes se guardan en un archivo de texto o CSV para imprimirlos |
 

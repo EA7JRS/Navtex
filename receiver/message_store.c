@@ -670,6 +670,29 @@ return result;
 }
 
 
+// Copies the value of one of the six lists of followed letters ("stations518", "messages490"...).
+// Returns 1 when found.
+int get_config_value(const char *tag, char *out, size_t out_size) {
+        sqlite3 *db;
+        sqlite3_stmt *stmt;
+        int found = 0;
+
+        if (out_size == 0) return 0;
+        out[0] = '\0';
+        open_db(&db);
+        if (db == NULL) return 0;
+        if (sqlite3_prepare_v2(db, "select value from config where tag = ?1", -1, &stmt, NULL) == SQLITE_OK) {
+                sqlite3_bind_text(stmt, 1, tag, -1, SQLITE_STATIC);
+                if (sqlite3_step(stmt) == SQLITE_ROW && sqlite3_column_text(stmt, 0) != NULL) {
+                        snprintf(out, out_size, "%s", (const char *) sqlite3_column_text(stmt, 0));
+                        found = 1;
+                }
+                sqlite3_finalize(stmt);
+        }
+        sqlite3_close(db);
+        return found;
+}
+
 // Returns 0 when the setting has been saved, -1 when the tag or the value are
 // not acceptable and -2 on a database error.
 int update_config(char* tag,char* value) {
@@ -775,7 +798,9 @@ char *get_messages_changed(unsigned int since_id, long heard_after, int limit) {
                         }
                         cJSON_AddStringToObject(m, "message", text);
                         // not yet opened in the web interface
-                        cJSON_AddBoolToObject(m, "unread", sqlite3_column_text(stmt, 6) != NULL && strcmp((const char *) sqlite3_column_text(stmt, 6), "NEW") == 0);
+                        // ...and for 24 hours at most (IMO MSC.508(105), 5.2.1: shown "until acknowledged or until 24 hours after receipt")
+                        cJSON_AddBoolToObject(m, "unread", sqlite3_column_text(stmt, 6) != NULL && strcmp((const char *) sqlite3_column_text(stmt, 6), "NEW") == 0
+                                                           && calculate_time_difference((char *) sqlite3_column_text(stmt, 3)) < 24 * 3600);
                         cJSON_AddItemToArray(json, m);
                 }
                 sqlite3_finalize(stmt);
