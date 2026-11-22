@@ -258,7 +258,19 @@
     $('gps').className = 'valor mono gps';
     $('hora-utc').className = 'valor mono';
   }
+  // Clima espacial de ahora (escalas de la NOAA que manda S.A.T.-APRS+). Afecta a la onda corta (4209,5 kHz) y, de noche, a la
+  // recepción lejana de 518 y 490 kHz.
+  function pintarClimaEspacial() {
+    var a = $('aviso-espacial'), m = /^R([0-5])S([0-5])G([0-5])T(\d{9,11})$/.exec(ajustes['space.wx'] || ''), partes = [];
+    if (!a) return;
+    if (!m || Date.now() / 1000 - Number(m[4]) > 3 * 3600 || (m[1] === '0' && m[3] === '0')) { a.hidden = true; return; }
+    if (m[1] !== '0') partes.push(tr('Apagón de radio R') + m[1] + tr(': 4209,5 kHz puede no llegar de día.'));
+    if (m[3] !== '0') partes.push(tr('Tormenta geomagnética G') + m[3] + tr(': peor recepción en 4209,5 kHz y, de noche, de las estaciones lejanas de 518 y 490 kHz.'));
+    a.hidden = false;
+    a.textContent = tr('Clima espacial ahora (NOAA, ') + horaUtc(Number(m[4]) * 1000) + ' UTC). ' + partes.join(' ');
+  }
   function pintarEstado() {
+    pintarClimaEspacial();
     var ahora = Date.now();
     var d = new Date(ahora);
     $('hora-utc').textContent = dos(d.getUTCHours()) + ':' + dos(d.getUTCMinutes()) + ':' + dos(d.getUTCSeconds());

@@ -9,6 +9,11 @@
 window.NAVTEX_I18N = (function () {
   'use strict';
   var EN = {
+ "Apagón de radio R": "Radio blackout R",
+ ": 4209,5 kHz puede no llegar de día.": ": 4209.5 kHz may not arrive by day.",
+ "Tormenta geomagnética G": "Geomagnetic storm G",
+ ": peor recepción en 4209,5 kHz y, de noche, de las estaciones lejanas de 518 y 490 kHz.": ": worse reception on 4209.5 kHz and, at night, of the distant stations of 518 and 490 kHz.",
+ "Clima espacial ahora (NOAA, ": "Space weather now (NOAA, ",
  " · VOACAP: llega el ": " · VOACAP: it arrives on ",
  " % de los días a esa hora": " % of the days at that hour",
  " (con boletín meteorológico)": " (with weather bulletin)",

@@ -924,6 +924,10 @@ int valid_setting(const char *tag, const char *value) {
         // form of the NRX sentence: the one of Furuno's receivers, or the one of IEC 61097-6 (annex C)
         if (strcmp(tag, "nrx.format") == 0) return one_of(value, "furuno", "iec", NULL, NULL);
         if (strcmp(tag, "nrx.bam") == 0) return one_of(value, "on", "off", NULL, NULL);
+        // space weather now, sent by S.A.T.-APRS+: NOAA scales and the unix time they were read, "R1S0G2T1795370000"
+        if (strcmp(tag, "space.wx") == 0)
+            return value[0] == '\0' || (strlen(value) >= 16 && strlen(value) <= 18 && value[0] == 'R' && strchr("012345", value[1]) && value[2] == 'S' && strchr("012345", value[3])
+                && value[4] == 'G' && strchr("012345", value[5]) && value[6] == 'T' && all_of(value + 7, "0123456789", 11));
         if (strcmp(tag, "nrx.tcp") == 0) return value[0] != '\0' && all_of(value, "0123456789", 5) && (atoi(value) == 0 || (atoi(value) >= 1024 && atoi(value) <= 65535));
         if ((strncmp(tag, "rx1.", 4) != 0 && strncmp(tag, "rx2.", 4) != 0)) return 0;
         key = tag + 4;

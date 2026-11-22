@@ -2,6 +2,10 @@
 
 Fork EA7JRS/Navtex del receptor NAVTEX de bartelvdh. Las entradas dicen también qué se probó y qué no. Lo descrito en una fase puede haber cambiado en las posteriores (por ejemplo, los servicios y sus ajustes): el estado actual es el del [README](README.md).
 
+## [1.7.3] - 2026-11-22
+
+- **Aviso de clima espacial**: S.A.T.-APRS+ 1.52.0 manda las escalas oficiales de la NOAA (ajuste nuevo `space.wx`); con un apagón de radio (R) o una tormenta geomagnética (G) en las últimas tres horas, la página lo avisa arriba, porque afecta a 4209,5 kHz y a la recepción nocturna lejana. Sin S.A.T.-APRS+ no cambia nada. Sin probar con un aviso real.
+
 ## [1.7.2] - 2026-11-22
 
 - **Predicción de onda corta para 4209,5 kHz**: si [Wefax](https://github.com/EA7JRS/Wefax) 0.3.0 está en el mismo equipo (puerto 8081) con VOACAP instalado, cada estación de 4209,5 kHz dice qué parte de los días del mes llega a la hora de su próxima emisión. Se suponen 5 kW (la potencia no está publicada). En 518 y 490 kHz no se aplica: VOACAP empieza en 2 MHz. Sin Wefax no cambia nada.
