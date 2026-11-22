@@ -88,10 +88,14 @@ if [ -n "$OTROS" ] && [ "$USA_RTL" = 0 ]; then
 fi
 systemctl daemon-reload
 
-systemctl enable --now navtex-web.service
+# restart, y no solo arrancar: si ya estaba en marcha seguiría con el programa anterior
+systemctl enable navtex-web.service
+systemctl restart navtex-web.service
 if [ -n "$OTROS" ] && [ "$USA_RTL" = 0 ]; then
   systemctl disable navtex-receiver.service >/dev/null 2>&1 || true
   echo "El receptor SDRplay lo comparten: $OTROS"
+  # Si estaba recibiendo, que siga, pero con el programa nuevo
+  if systemctl is-active --quiet navtex-receiver.service; then systemctl restart navtex-receiver.service; fi
   echo "navtex-receiver queda instalado pero NO arranca solo, para no quitarles el receptor."
   echo "  Recibir NAVTEX:      sudo systemctl start navtex-receiver   (para los otros)"
   echo "  Volver a lo de antes: sudo systemctl start ${OTROS%% *}"
