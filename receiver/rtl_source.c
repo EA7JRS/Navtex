@@ -3,8 +3,10 @@
  *
  * NAVTEX is at 490 and 518 kHz, far below what the tuner of an RTL-SDR
  * reaches, so one of these is needed:
- *   - direct sampling (RTL-SDR Blog V3 and similar): the antenna goes
- *     straight into the RTL2832 converter, usually on the Q branch (-D 2);
+ *   - direct sampling (Nooelec NESDR SMArt v5, RTL-SDR Blog V3 and similar):
+ *     the antenna goes straight into the RTL2832 converter, on the Q branch
+ *     (-D 2). The SMArt v5 covers 0.1 to 25 MHz this way, with no driver or
+ *     hardware change;
  *   - a dongle with a built-in upconverter (RTL-SDR Blog V4): -D 0, the
  *     driver switches it in for frequencies below 28.8 MHz;
  *   - an external upconverter: -u <its local oscillator in Hz>.
@@ -57,8 +59,32 @@ static int nearest_gain(int wanted_tenths)
     return best;
 }
 
+/* Direct sampling mode that suits the dongle, from its USB strings */
+static int direct_sampling_for(const char *manufact, const char *product, const char **why)
+{
+    if (iq_opt.rtl_upconverter_hz > 0)
+    {
+        *why = "external upconverter";
+        return 0;
+    }
+    if (strstr(product, "Blog V4") != NULL)
+    {
+        *why = "RTL-SDR Blog V4: built-in upconverter";
+        return 0;
+    }
+    if (strstr(product, "SMArt v5") != NULL || (strstr(manufact, "Nooelec") != NULL && strstr(product, "v5") != NULL))
+    {
+        *why = "Nooelec NESDR SMArt v5: HF on the Q branch";
+        return 2;
+    }
+    *why = "Q branch, the usual HF input; use -D to change it";
+    return 2;
+}
+
 int rtlsdr_source_run(void)
 {
+    const char *why = "set with -D";
+    int direct;
     pthread_t reader;
     char manufact[256] = "", product[256] = "", serial[256] = "";
     uint32_t count = rtlsdr_get_device_count();
@@ -70,6 +96,16 @@ int rtlsdr_source_run(void)
     {
         printf("rtlsdr: no RTL-SDR device found\n");
         return 1;
+    }
+    if (iq_opt.rtl_serial != NULL)
+    {
+        int idx = rtlsdr_get_index_by_serial(iq_opt.rtl_serial);
+        if (idx < 0)
+        {
+            printf("rtlsdr: no device with serial number '%s'\n", iq_opt.rtl_serial);
+            return 1;
+        }
+        iq_opt.rtl_index = idx;
     }
     if (iq_opt.rtl_index < 0 || (uint32_t) iq_opt.rtl_index >= count)
     {
@@ -85,13 +121,15 @@ int rtlsdr_source_run(void)
         return 1;
     }
 
-    if (rtlsdr_set_direct_sampling(dev, iq_opt.rtl_direct_sampling) != 0)
+    direct = iq_opt.rtl_direct_sampling;
+    if (direct < 0)
+        direct = direct_sampling_for(manufact, product, &why);
+    if (rtlsdr_set_direct_sampling(dev, direct) != 0)
     {
-        printf("rtlsdr: cannot set direct sampling mode %d\n", iq_opt.rtl_direct_sampling);
+        printf("rtlsdr: cannot set direct sampling mode %d\n", direct);
         goto close_dev;
     }
-    printf("rtlsdr: direct sampling %s\n", iq_opt.rtl_direct_sampling == 0 ? "off (tuner / upconverter)" :
-                                           iq_opt.rtl_direct_sampling == 1 ? "on, I branch" : "on, Q branch");
+    printf("rtlsdr: direct sampling %s (%s)\n", direct == 0 ? "off" : direct == 1 ? "on, I branch" : "on, Q branch", why);
 
     if (rtlsdr_set_sample_rate(dev, IQ_SAMPLE_RATE) != 0)
     {
@@ -107,7 +145,7 @@ int rtlsdr_source_run(void)
     }
     printf("rtlsdr: tuned to %u Hz, %d S/s\n", rtlsdr_get_center_freq(dev), (int) rtlsdr_get_sample_rate(dev));
 
-    if (iq_opt.rtl_direct_sampling != 0)
+    if (direct != 0)
     {
         /* No tuner in the path: the only level control is the AGC of the RTL2832 */
         rtlsdr_set_agc_mode(dev, 1);

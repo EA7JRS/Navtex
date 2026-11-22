@@ -24,7 +24,8 @@ struct iq_options {
     int bias_t;               /* -b  power an active antenna through the coax */
     char antenna_port;        /* -p  SDRplay antenna port A/B/C */
     int rtl_index;            /* -i  RTL-SDR device index */
-    int rtl_direct_sampling;  /* -D  0 off (tuner or built-in upconverter), 1 I branch, 2 Q branch; -1 = not set */
+    const char *rtl_serial;   /* -S  RTL-SDR serial number (instead of the index) */
+    int rtl_direct_sampling;  /* -D  0 off (tuner or built-in upconverter), 1 I branch, 2 Q branch; -1 = from the model */
     long rtl_upconverter_hz;  /* -u  LO of an external upconverter, 0 = none */
     int rtl_gain_tenths;      /* -g  tuner gain in tenths of dB, -1 = automatic */
     int rtl_ppm;              /* -P  crystal correction */

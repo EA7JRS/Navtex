@@ -48,7 +48,7 @@ void init_fir2_wrapper();
 
 short debug_mode;
 
-struct iq_options iq_opt = { 0, 'A', 0, -1, 0, -1, 0, NULL, 0 };
+struct iq_options iq_opt = { 0, 'A', 0, NULL, -1, 0, -1, 0, NULL, 0 };
 
 // Set by SIGINT/SIGTERM: stop streaming and release the receiver cleanly.
 volatile sig_atomic_t stop_requested = 0;
@@ -635,8 +635,10 @@ static void usage(const char *prog)
 "  -p port     antenna port A, B or C (RSPdx, RSPdx-R2)\n"
 "RTL-SDR:\n"
 "  -i index    device index (default 0)\n"
-"  -D mode     direct sampling: 0 off, 1 I branch, 2 Q branch\n"
-"              (default 2; 0 when -u is given). Use 0 with an RTL-SDR Blog V4.\n"
+"  -S serial   pick the device by its serial number instead\n"
+"  -D mode     direct sampling: 0 off, 1 I branch, 2 Q branch. Chosen from the model\n"
+"              when not given: Q branch (Nooelec NESDR SMArt v5, RTL-SDR Blog V3...),\n"
+"              off for an RTL-SDR Blog V4 (built-in upconverter) and when -u is given\n"
 "  -u hertz    local oscillator of an external upconverter, e.g. 125000000\n"
 "  -g gain     tuner gain in dB, e.g. 28.0 (default: automatic). Not used in direct sampling.\n"
 "  -P ppm      crystal correction\n"
@@ -659,7 +661,7 @@ int main(int argc, char *argv[])
   // line-buffered output, so the messages reach the journal as they happen
   setvbuf(stdout, NULL, _IOLBF, 0);
 
-  while ((c = getopt (argc, argv, "bdhts:p:i:D:u:g:P:f:")) != -1) {
+  while ((c = getopt (argc, argv, "bdhts:p:i:S:D:u:g:P:f:")) != -1) {
     switch (c)
       {
       case 'b':
@@ -694,6 +696,9 @@ int main(int argc, char *argv[])
       case 'i':
         iq_opt.rtl_index = atoi(optarg);
         break;
+      case 'S':
+        iq_opt.rtl_serial = optarg;
+        break;
       case 'D':
         iq_opt.rtl_direct_sampling = atoi(optarg);
         if (iq_opt.rtl_direct_sampling < 0 || iq_opt.rtl_direct_sampling > 2) { printf("invalid direct sampling mode (0, 1 or 2)\n"); return 1; }
@@ -713,7 +718,7 @@ int main(int argc, char *argv[])
         iq_opt.file_path = optarg;
         break;
       case '?':
-        if (optopt != 0 && strchr("spiDugPf", optopt) != NULL)
+        if (optopt != 0 && strchr("spiSDugPf", optopt) != NULL)
           fprintf (stderr, "Option -%c requires an argument.\n", optopt);
         else if (isprint (optopt))
           fprintf (stderr, "Unknown option `-%c'.\n", optopt);
@@ -738,10 +743,6 @@ int main(int argc, char *argv[])
            source = "rtlsdr";
 #endif
    }
-   // an external upconverter means the tuner is used, unless told otherwise
-   if (iq_opt.rtl_direct_sampling < 0)
-       iq_opt.rtl_direct_sampling = (iq_opt.rtl_upconverter_hz > 0) ? 0 : 2;
-
    init_dsp();
    init_fir2_wrapper();
 

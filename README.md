@@ -100,11 +100,16 @@ Un RTL-SDR no sintoniza por sí solo 490 y 518 kHz. Hay tres formas de llegar:
 
 | Equipo | Orden |
 | :--- | :--- |
-| Muestreo directo (RTL-SDR Blog V3 y similares, antena a la entrada de HF, rama Q) | `navtexreceiver -s rtlsdr` (equivale a `-D 2`; rama I: `-D 1`) |
-| Conversor integrado (RTL-SDR Blog V4) | `navtexreceiver -s rtlsdr -D 0` |
+| **Nooelec NESDR SMArt v5**: muestreo directo por la rama Q, de 0,1 a 25 MHz, sin cambiar controlador ni tocar el equipo | `navtexreceiver -s rtlsdr` |
+| Otros con muestreo directo (RTL-SDR Blog V3 y similares, antena a la entrada de HF) | `navtexreceiver -s rtlsdr` (rama Q; rama I: `-D 1`) |
+| Conversor integrado (RTL-SDR Blog V4) | `navtexreceiver -s rtlsdr` |
 | Conversor externo (por ejemplo, de 125 MHz) | `navtexreceiver -s rtlsdr -u 125000000` |
 
-Otras opciones del RTL-SDR: `-i` índice del equipo, `-g` ganancia del sintonizador en dB (automática si no se da; no se usa en muestreo directo), `-P` corrección en ppm y `-b` alimentación por el coaxial. `navtexreceiver -h` las lista todas.
+El modo de muestreo se elige solo según el modelo que anuncia el equipo por USB (rama Q para el NESDR SMArt v5 y para los que no se reconocen; apagado para el Blog V4 y con `-u`), y el arranque lo dice. `-D 0`, `-D 1` o `-D 2` lo fuerzan.
+
+El NESDR SMArt v5 no tiene alimentación por el coaxial: una antena activa necesita su propio inyector.
+
+Otras opciones del RTL-SDR: `-i` índice del equipo, `-S` número de serie (con varios equipos conectados), `-g` ganancia del sintonizador en dB (automática si no se da; no se usa en muestreo directo), `-P` corrección en ppm y `-b` alimentación por el coaxial. `navtexreceiver -h` las lista todas.
 
 Con 8 bits y sin filtros de entrada, un RTL-SDR recibe NAVTEX peor que un SDRplay: en onda media las emisoras de radiodifusión cercanas lo saturan con facilidad. Un filtro paso bajo o una antena activa sintonizada ayudan mucho.
 
