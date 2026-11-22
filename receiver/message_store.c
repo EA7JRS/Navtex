@@ -630,6 +630,7 @@ int valid_setting(const char *tag, const char *value) {
         const char *key;
         if (tag == NULL || value == NULL) return 0;
         if (strcmp(tag, "position") == 0) return valid_position(value);
+        if (strcmp(tag, "position_source") == 0) return one_of(value, "gps", "manual", NULL, NULL);
         if ((strncmp(tag, "rx1.", 4) != 0 && strncmp(tag, "rx2.", 4) != 0)) return 0;
         key = tag + 4;
         if (strcmp(key, "enabled") == 0 || strcmp(key, "bias") == 0) return one_of(value, "0", "1", NULL, NULL);

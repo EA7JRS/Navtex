@@ -217,6 +217,17 @@ Probado con una recepción real colocada en el canal de onda corta: se descodifi
 
 Probado: los ajustes y su validación; el cambio de banda por horario; el receptor sin equipo (reintenta sin salir); y la interfaz en un navegador (posición, estaciones en alcance, próximas emisiones, receptores y aspecto). **Sin probar con equipos reales**, y en particular dos receptores a la vez.
 
+### Fase 8 · posición por GPS
+
+La interfaz web toma la posición propia de **gpsd** (de serie, el del propio equipo, `127.0.0.1:2947`; se cambia o se quita con `NAVTEX_GPSD` en `/etc/default/navtex`).
+
+- Junto a la hora hay un recuadro con la posición del GPS como se lee en una carta, el localizador, el tipo de fijo, los satélites y la altitud.
+- La pestaña «Estaciones» usa esa posición para ordenar por distancia y marcar las que quedan en alcance; las listas se rehacen solas cuando el barco se ha movido más de una milla.
+- Si el GPS no da posición, o si se desmarca «Usar la posición del GPS», se usa la escrita a mano.
+- El servidor solo lee de gpsd; no envía nada al GPS. `GET /api/gps` da los mismos datos.
+
+Probado con un gpsd de pruebas que envía los mismos informes que el real (con fijo, sin gpsd y desactivado) y en un navegador. **Sin probar con el gpsd del equipo.**
+
 ### Previsto
 
 - Sentencias `NRX` de NMEA 0183 para equipos que las admitan.

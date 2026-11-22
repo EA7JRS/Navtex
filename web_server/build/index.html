@@ -69,7 +69,9 @@
     <section id="vista-estaciones" aria-label="Estaciones" hidden>
       <div class="tarjeta" id="tarjeta-posicion">
         <h2>Mi posición</h2>
-        <p class="nota">Con la posición, la lista de cada frecuencia se ordena por distancia y dice qué estaciones le quedan en alcance. Vale latitud y longitud en grados decimales (<span class="mono">36.53, -6.29</span>) o un localizador (<span class="mono">IM66uq</span>).</p>
+        <p class="nota">Con la posición, la lista de cada frecuencia se ordena por distancia y dice qué estaciones le quedan en alcance.</p>
+        <label class="interruptor"><input type="checkbox" id="usar-gps" checked> Usar la posición del GPS</label>
+        <p class="nota">Si el GPS no da posición, o si lo desmarca, se usa la que escriba aquí: latitud y longitud en grados decimales (<span class="mono">36.53, -6.29</span>) o un localizador (<span class="mono">IM66uq</span>).</p>
         <form class="fila" id="form-posicion">
           <label class="campo crece"><span class="oculto">Posición</span>
             <input type="text" id="posicion" placeholder="36.53, -6.29  o  IM66uq" autocomplete="off" spellcheck="false">

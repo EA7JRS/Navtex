@@ -9,3 +9,6 @@
 #   127.0.0.1  solo este equipo
 WEB_PORT=8080
 WEB_ADDRESS=0.0.0.0
+
+# Posición propia: gpsd del que se toma (equipo:puerto). Vacío, sin GPS.
+NAVTEX_GPSD=127.0.0.1:2947

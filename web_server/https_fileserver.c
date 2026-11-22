@@ -59,6 +59,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "../receiver/message_store.h"
+#include "gps.h"
 
 #define MAX_URL_LEN 255
 
@@ -296,6 +297,16 @@ http_ahc (void *cls,
       free (st);
       return ret;
   }
+  if (strcmp (url, "/api/gps") == 0)
+  {
+      char *g = gps_json ();
+      if (g == NULL)
+        return send_text (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, ERROR_JSON, "application/json", 0);
+      /* the position of the station is only for our own page */
+      ret = send_text (connection, MHD_HTTP_OK, g, "application/json", 0);
+      free (g);
+      return ret;
+  }
   if (strcmp (url, "/api/settings") == 0)
   {
       char *st = get_settings_json ();
@@ -418,6 +429,13 @@ main (int argc, char *const *argv)
       return 1;
     }
   printf ("MHD daemon listening on %s port %d\n", address != NULL ? address : "all addresses", port_nr);
+  /* Position from gpsd: NAVTEX_GPSD=host:port, or empty to do without */
+  {
+    const char *gpsd = getenv ("NAVTEX_GPSD");
+    if (gpsd == NULL) gpsd = "127.0.0.1:2947";
+    gps_start (gpsd);
+    printf (gpsd[0] != '\0' ? "Position from gpsd at %s\n" : "Position from gpsd disabled%s\n", gpsd);
+  }
   fflush (stdout);
 
   for (;;)

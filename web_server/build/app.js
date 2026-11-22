@@ -43,6 +43,8 @@
   var abiertos = {};            // id -> true
   var verTodas = {};            // frecuencia -> true: lista completa de estaciones
   var estado = null;
+  var gps = null;               // /api/gps
+  var posPintada = null;        // posición con la que se pintaron las listas
 
   function $(id) { return document.getElementById(id); }
   function crear(etiqueta, clase, texto) {
@@ -110,11 +112,36 @@
   }
 
   // --------------------------------------------------------------- posición
-  function posicion() {
+  function posicionManual() {
     var p = String(ajustes.position || '').split(',');
     var lat = parseFloat(p[0]), lon = parseFloat(p[1]);
     return p.length === 2 && isFinite(lat) && isFinite(lon) ? { lat: lat, lon: lon } : null;
   }
+  // La del GPS si se quiere y hay fijo reciente; si no, la escrita a mano
+  function usaGps() { return ajustes.position_source !== 'manual'; }
+  function posicionGps() {
+    return gps && gps.connected && typeof gps.lat === 'number' && typeof gps.lon === 'number' && !(gps.age > 120)
+      ? { lat: gps.lat, lon: gps.lon } : null;
+  }
+  function posicion() {
+    return (usaGps() && posicionGps()) || posicionManual();
+  }
+  // Localizador Maidenhead de seis caracteres
+  function localizador(p) {
+    var lo = p.lon + 180, la = p.lat + 90;
+    if (!(lo >= 0 && lo < 360 && la >= 0 && la < 180)) return '';
+    return String.fromCharCode(65 + Math.floor(lo / 20)) + String.fromCharCode(65 + Math.floor(la / 10))
+      + Math.floor((lo % 20) / 2) + Math.floor(la % 10)
+      + String.fromCharCode(97 + Math.floor((lo % 2) * 12)) + String.fromCharCode(97 + Math.floor((la % 1) * 24));
+  }
+  // "37° 36,46' N  000° 59,09' O": como se lee en una carta
+  function gradosMinutos(v, positivo, negativo, ancho) {
+    var a = Math.abs(v), g = Math.floor(a), m = (a - g) * 60;
+    if (m >= 59.995) { g += 1; m = 0; }
+    var gs = String(g); while (gs.length < ancho) gs = '0' + gs;
+    return gs + '° ' + (m < 10 ? '0' : '') + m.toFixed(2).replace('.', ',') + "' " + (v >= 0 ? positivo : negativo);
+  }
+  function enCarta(p) { return gradosMinutos(p.lat, 'N', 'S', 2) + '  ' + gradosMinutos(p.lon, 'E', 'O', 3); }
   // "36.53, -6.29" o un localizador Maidenhead de 4, 6 u 8 caracteres
   function leerPosicion(texto) {
     var t = String(texto).trim();
@@ -193,12 +220,15 @@
     raiz.appendChild(dato('sinc-490', '490 kHz · nacional'));
     raiz.appendChild(dato('sinc-4209', '4209,5 kHz · onda corta'));
     raiz.appendChild(dato('hora-utc', 'Hora UTC'));
+    raiz.appendChild(dato('gps', 'Posición GPS'));
+    $('gps').className = 'valor mono gps';
     $('hora-utc').className = 'valor mono';
   }
   function pintarEstado() {
     var ahora = Date.now();
     var d = new Date(ahora);
     $('hora-utc').textContent = dos(d.getUTCHours()) + ':' + dos(d.getUTCMinutes()) + ':' + dos(d.getUTCSeconds());
+    pintarGps();
     if (!estado) return;
     [1, 2].forEach(function (n) {
       var r = estadoReceptor(n, ahora);
@@ -487,9 +517,44 @@
       ol.appendChild(li);
     });
   }
+  function pintarGps() {
+    var v = $('gps'), x = $('gps-detalle');
+    if (!v) return;
+    var p = posicionGps();
+    if (!gps) { v.textContent = '—'; x.textContent = ''; return; }
+    if (!gps.enabled) { v.textContent = 'sin GPS'; x.textContent = 'no hay gpsd configurado'; return; }
+    if (!gps.connected) { v.textContent = 'sin GPS'; x.textContent = 'gpsd no contesta'; return; }
+    var sat = typeof gps.used === 'number' ? gps.used + ' de ' + gps.visible + ' satélites' : '';
+    if (!p) { v.textContent = 'sin posición'; x.textContent = 'buscando satélites' + (sat ? ' · ' + sat : ''); return; }
+    v.textContent = enCarta(p);
+    x.textContent = localizador(p) + ' · ' + (gps.fix >= 3 ? '3D' : '2D') + (sat ? ' · ' + sat : '')
+      + (typeof gps.alt === 'number' ? ' · ' + Math.round(gps.alt) + ' m' : '');
+  }
   function pintarPosicion() {
+    var p = posicion(), g = posicionGps(), m = posicionManual();
+    $('usar-gps').checked = usaGps();
+    var texto;
+    if (usaGps() && g) texto = 'En uso: la del GPS, ' + enCarta(g) + ' (' + localizador(g) + ').';
+    else if (usaGps() && m) texto = 'El GPS no da posición ahora: se usa la escrita, ' + m.lat.toFixed(3) + ', ' + m.lon.toFixed(3) + ' (' + localizador(m) + ').';
+    else if (usaGps()) texto = 'El GPS no da posición ahora y no hay ninguna escrita.';
+    else if (m) texto = 'En uso: la escrita, ' + m.lat.toFixed(3) + ', ' + m.lon.toFixed(3) + ' (' + localizador(m) + ').';
+    else texto = 'Sin posición.';
+    $('posicion-actual').textContent = texto;
+    posPintada = p;
+  }
+  // El GPS se mueve: las listas solo se rehacen si la posición cambia de verdad
+  function posicionCambio() {
     var p = posicion();
-    $('posicion-actual').textContent = p ? 'Posición guardada: ' + p.lat.toFixed(3) + ', ' + p.lon.toFixed(3) + '.' : 'Sin posición guardada.';
+    if ((p === null) !== (posPintada === null)) return true;
+    return p !== null && distanciaMn(p, posPintada) > 1;
+  }
+  function leerGps() {
+    return pedir('/api/gps').then(function (j) {
+      gps = j && typeof j === 'object' ? j : null;
+    }).catch(function () { gps = null; }).then(function () {
+      pintarGps();
+      if (posicionCambio()) { pintarPosicion(); pintarAjustes(); pintarProximas(); }
+    });
   }
 
   // ------------------------------------------------------------ receptores
@@ -695,12 +760,20 @@
       .catch(function (e) { avisar('estado-ajustes', false, 'No se pudo guardar: ' + e.message + '.'); });
   });
 
+  $('usar-gps').addEventListener('change', function () {
+    ajustes.position_source = $('usar-gps').checked ? 'gps' : 'manual';
+    enviar('/api/settings/position_source/' + ajustes.position_source).then(function () {
+      pintarPosicion(); pintarAjustes(); pintarProximas(); pintarLista();
+    }).catch(function (e) { avisar('estado-ajustes', false, 'No se pudo guardar: ' + e.message + '.'); });
+  });
+
   montarEstado();
   pintarAjustes();
   pintarProximas();
   pintarReceptores();
   leerEstaciones().catch(function () { /* sin base de estaciones: quedan las letras */ });
-  leerAjustes().catch(function () { /* sin ajustes: valores de serie */ });
+  leerAjustes().catch(function () { /* sin ajustes: valores de serie */ }).then(leerGps);
+  setInterval(leerGps, 10000);
   leerConfig().catch(function () { /* sin filtros se muestra todo */ }).then(leerTodo);
   setInterval(leerTodo, 60000);
   setInterval(pintarEstado, 1000);

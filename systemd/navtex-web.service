@@ -9,6 +9,7 @@ Type=simple
 User=@USUARIO@
 Environment=WEB_PORT=8080
 Environment=WEB_ADDRESS=0.0.0.0
+Environment=NAVTEX_GPSD=127.0.0.1:2947
 EnvironmentFile=-/etc/default/navtex
 ExecStart=/usr/local/bin/navtexwebserver $WEB_PORT $WEB_ADDRESS
 Restart=on-failure
