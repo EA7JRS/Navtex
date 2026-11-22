@@ -267,3 +267,5 @@ input[type="text"] {
 .alarma p { margin: 0; flex: 1 1 260px; }
 .alarma strong { color: var(--rojo); }
 .alarma .boton { border-color: var(--rojo); font-weight: 700; }
+/* En pantallas estrechas el botón de aspecto queda a la izquierda: el menú se abre hacia la derecha */
+@media (max-width: 640px) { .tema-menu { right: auto; left: 0; } }

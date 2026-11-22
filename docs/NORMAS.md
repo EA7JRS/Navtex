@@ -1,6 +1,6 @@
 # Navtex · Normas y reglamentos
 
-© 2026 Manuel - EA7JRS · versión 1.6.0 · ediciones comprobadas el 22 de noviembre de 2026
+© 2026 Manuel - EA7JRS · versión 1.6.1 · ediciones comprobadas el 22 de noviembre de 2026
 
 Este documento dice qué normas contempla el programa, qué aplica de cada una y qué no. Sirve para saber hasta dónde se puede confiar en él y para revisar el código contra el texto de cada norma.
 

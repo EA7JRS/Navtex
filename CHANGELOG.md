@@ -2,6 +2,13 @@
 
 Fork EA7JRS/Navtex del receptor NAVTEX de bartelvdh. Las entradas dicen también qué se probó y qué no. Lo descrito en una fase puede haber cambiado en las posteriores (por ejemplo, los servicios y sus ajustes): el estado actual es el del [README](README.md).
 
+## [1.6.1] - 2026-11-22
+
+- Cabecera: el botón «Acerca de» pasa al extremo derecho, después de los de aspecto e idioma.
+- En el móvil, el menú de aspecto se abre hacia la derecha para no salirse de la pantalla.
+
+---
+
 ## [1.6.0] - 2026-11-22
 
 ### Sentencia NRM, regla de las 24 horas y un fallo de la alarma
