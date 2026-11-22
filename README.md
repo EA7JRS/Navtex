@@ -12,6 +12,8 @@ Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.c
 
 > **Aviso.** Este programa es una ayuda. No sustituye a un receptor NAVTEX homologado donde este sea obligatorio, ni a las publicaciones oficiales.
 
+📘 [Normas y reglamentos que contempla](docs/NORMAS.md) · 📝 [Historial de cambios](CHANGELOG.md)
+
 ## Qué hace
 
 | Función | Detalle |
@@ -40,7 +42,9 @@ Probado el 22-11-2026 en un Intel NUC con Debian 13:
 - la interfaz web desde otros equipos de la red;
 - el descodificador, con dos grabaciones reales de NAVTEX.
 
-**Sin probar todavía:** la recepción de un mensaje completo del aire, y una emisión real en 4209,5 kHz. El detalle de cada parte está en el [historial de cambios](CHANGELOG.md).
+Probado el mismo día fuera del NUC, con el programa real y esas grabaciones: las reglas del receptor, el borrado, la exportación, la salida NMEA 0183 por UDP y TCP (sentencias `NRX`, `ALR` y `ACK`) y la alarma de búsqueda y salvamento, esta con un mensaje escrito para la prueba. `make check` repite 87 comprobaciones.
+
+**Sin probar todavía:** la recepción de un mensaje completo del aire, una emisión real en 4209,5 kHz, y la salida NMEA 0183 con un plotter. El detalle de cada parte está en el [historial de cambios](CHANGELOG.md).
 
 ## Qué hace falta
 
@@ -235,6 +239,8 @@ Un mensaje del tema D sin reconocer lleva además `"alarm":true`, y `/api/status
 Los cambios (`/api/settings/<clave>/<valor>`, `/saveconfig/<ajuste>/<valor>`, `/api/messages/delete/…` y `/api/alarm/ack`) solo se aceptan por `POST` y con la cabecera `X-Navtex`, de modo que otra página abierta en el mismo navegador no puede cambiar nada.
 
 ## Reglas de un receptor NAVTEX
+
+El detalle, norma por norma y apartado por apartado, con lo que se aplica y lo que no, está en **[docs/NORMAS.md](docs/NORMAS.md)**.
 
 El programa sigue lo que piden a un receptor la resolución MSC.148(77) de la OMI y el Manual NAVTEX, y las características de la Recomendación UIT-R M.540 (impresión directa de banda estrecha con corrección de errores, modo B colectivo: 100 baudios y 170 Hz de desplazamiento).
 

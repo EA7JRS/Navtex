@@ -11,6 +11,7 @@ Fork EA7JRS/Navtex del receptor NAVTEX de bartelvdh. Las entradas dicen también
 - **`NRX` en la forma de la norma** (IEC 61097-6, anexo C), además de la de Furuno, que sigue de serie. Se elige en Receptores.
 - API: `alarm` en los mensajes, `sar_alarms` en `/api/status` y `POST /api/alarm/ack`.
 - `make check`: 87 comprobaciones; la suma de control se contrasta con el ejemplo de la propia norma.
+- Documentación: nuevo `docs/NORMAS.md`, con cada norma (UIT-R M.540-2, OMI MSC.148(77), Manual NAVTEX, IEC 61097-6, IEC 61162-1), el apartado, lo que se aplica y lo que no.
 - Probado con el programa real: mensaje D escrito para la prueba (no recibido), `ALR` cada 30 s y `ACK` por TCP con `nc`, y la interfaz en un navegador. No probado con un plotter ni con otro equipo que mande `ACK`. El pitido no se ha podido oír en la prueba.
 
 ---
