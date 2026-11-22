@@ -146,8 +146,27 @@ Robustez:
 
 Probado: la recepción cortada, con una grabación real seguida de ruido (se guarda como incompleta y, repetida, no duplica ni degrada); las reglas de guardado, sobre una base de datos del formato anterior; las unidades, con `systemd-analyze verify`. **Sin probar: el instalador en un equipo con systemd**, y un mensaje completo de principio a fin (las grabaciones reales disponibles no llegan al `NNNN`).
 
+### Fase 4 · salida para otros programas
+
+La interfaz web ofrece además una API de solo lectura, pensada para que otro programa (S.A.T.-APRS+, un plotter, un guion propio) recoja los mensajes por la red:
+
+| Dirección | Qué devuelve |
+| :--- | :--- |
+| `GET /api/messages?since=<id>&limit=<n>` | Los mensajes con identificador mayor que `since`, del más antiguo al más reciente, con el texto completo. Sin filtros de estación ni de tipo, y sin marcar nada como leído. `limit` de 1 a 500 (200 si no se indica). |
+| `GET /api/status` | Qué está haciendo el receptor: origen (`sdrplay`, `rtlsdr`, `file`), cuándo arrancó, última vez que recibió muestras (`receiver_alive`, cada minuto), último sincronismo en cada frecuencia, número de mensajes y último identificador. |
+
+Cada mensaje:
+
+```json
+{"id":5,"bbbb":"EE39","station":"E","subject":"E","number":39,"freq":490,
+ "received":"2026-11-22T07:38:00Z","complete":false,"message":"ZCZC EE39\n062040 UTC NOV 21\n..."}
+```
+
+El uso previsto es preguntar cada minuto con el último `id` recibido. Las horas van en UTC.
+
+**NMEA 2000.** No existe un mensaje normalizado de NMEA 2000 para el texto de NAVTEX (el formato normalizado es la sentencia `NRX` de NMEA 0183). Este programa no inventa uno: los mensajes llegan al bus a través de S.A.T.-APRS+, que los recoge por esta API y los difunde con el resto de sus avisos.
+
 ### Previsto
 
-- Salida de los mensajes hacia S.A.T.-APRS+ y hacia NMEA 2000.
+- Sentencias `NRX` de NMEA 0183 para equipos que las admitan.
 - Interfaz web nueva, en español.
-

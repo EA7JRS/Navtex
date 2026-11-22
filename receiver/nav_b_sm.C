@@ -3,6 +3,7 @@
 
 extern "C" int add_message(char *bbbb,char *message, int freq, int complete);
 extern "C" int navtex_verbose;
+extern "C" void set_status_now(const char *tag);
 
 // Append to a fixed buffer without ever writing past its end: what arrives
 // over the air decides the length, so it cannot be trusted.
@@ -658,6 +659,7 @@ void byte_state_machine::receive_bit(char bit_received)
 			bits_received = 0;
                         temp_byte = 0x00;
                         printf("%u kHz: phasing detected\n", freq);
+                        set_status_now(freq == 518 ? "phasing_518" : "phasing_490");
 			phase_det_disable_timer = PHASE_DETECTION_DIS_TIMER_VALUE; 
 		}
 		status = STAT_INIT;

@@ -223,6 +223,45 @@ http_ahc (void *cls,
       free (cfg);
       return ret;
   }
+  if (strcmp (url, "/api/messages") == 0)
+  {
+      /* Full messages newer than ?since=<id>, for other programs; nothing is marked as read */
+      const char *since_arg = MHD_lookup_connection_value (connection, MHD_GET_ARGUMENT_KIND, "since");
+      const char *limit_arg = MHD_lookup_connection_value (connection, MHD_GET_ARGUMENT_KIND, "limit");
+      unsigned long since = 0, limit = 200;
+      char *end;
+      char *ml;
+
+      if (since_arg != NULL)
+      {
+        errno = 0;
+        since = strtoul (since_arg, &end, 10);
+        if (!isdigit ((unsigned char) since_arg[0]) || errno != 0 || *end != '\0' || since > 0x7fffffffUL)
+          return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+      }
+      if (limit_arg != NULL)
+      {
+        errno = 0;
+        limit = strtoul (limit_arg, &end, 10);
+        if (!isdigit ((unsigned char) limit_arg[0]) || errno != 0 || *end != '\0' || limit < 1 || limit > 500)
+          return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+      }
+      ml = get_messages_since ((unsigned int) since, (int) limit);
+      if (ml == NULL)
+        return send_text (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, ERROR_JSON, "application/json", 1);
+      ret = send_text (connection, MHD_HTTP_OK, ml, "application/json", 1);
+      free (ml);
+      return ret;
+  }
+  if (strcmp (url, "/api/status") == 0)
+  {
+      char *st = get_status_json ();
+      if (st == NULL)
+        return send_text (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, ERROR_JSON, "application/json", 1);
+      ret = send_text (connection, MHD_HTTP_OK, st, "application/json", 1);
+      free (st);
+      return ret;
+  }
   if (strncmp (url, "/saveconfig/", 12) == 0)
       return handle_saveconfig (connection, url);
   if (strncmp (url, "/messagetext/", 13) == 0)

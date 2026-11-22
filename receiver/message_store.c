@@ -13,6 +13,7 @@ extern char* strdup(const char*);
 #define TS_SIZE 20
 
 int navtex_verbose = 1;
+static int schema_checked = 0;
 
 // An incomplete reception does not replace a complete copy of the same message
 // received less than this long ago (a station repeats its messages every 4 hours).
@@ -70,9 +71,13 @@ void open_db(sqlite3 **db) {
                 return;
         }
         sqlite3_busy_timeout(*db, 5000);
-        // Databases created before the "complete" column existed get it now;
-        // the statement fails harmlessly when the column is already there.
-        sqlite3_exec(*db, "alter table messages add column complete integer default 1", NULL, NULL, NULL);
+        // Once per process: bring a database of an earlier version up to date.
+        // The "alter" fails harmlessly when the column is already there.
+        if (!schema_checked) {
+                sqlite3_exec(*db, "alter table messages add column complete integer default 1", NULL, NULL, NULL);
+                sqlite3_exec(*db, "create table if not exists status (tag text primary key, value text)", NULL, NULL, NULL);
+                schema_checked = 1;
+        }
 }
 
 // Only these settings exist, and their values are lists of NAVTEX B1/B2 letters.
@@ -446,4 +451,127 @@ int update_config(char* tag,char* value) {
         sqlite3_finalize(stmt);
         sqlite3_close(db);
         return rc == SQLITE_DONE ? 0 : -2;
+}
+
+
+// ---------------------------------------------------------------------------
+// Read-only API for other programs (2026 - Manuel - EA7JRS, fork EA7JRS/Navtex)
+// ---------------------------------------------------------------------------
+
+// "2026-11-22 07:12" (UTC, as stored) -> "2026-11-22T07:12:00Z"
+static void iso_timestamp(const char *stored, char *out, size_t out_size)
+{
+        if (stored != NULL && strlen(stored) == 16)
+                snprintf(out, out_size, "%.10sT%.5s:00Z", stored, stored + 11);
+        else
+                snprintf(out, out_size, "%s", stored != NULL ? stored : "");
+}
+
+// Every stored message with an id greater than since_id, oldest first, with its
+// full text. Nothing is filtered and nothing is marked as read: this is meant
+// for programs that keep their own copy and ask again with the last id they saw.
+char *get_messages_since(unsigned int since_id, int limit) {
+        cJSON *json;
+        sqlite3 *db;
+        sqlite3_stmt *stmt;
+        char *json_str, *result;
+
+        if (limit < 1) limit = 1;
+        if (limit > 500) limit = 500;
+        open_db(&db);
+        if (db == NULL) return NULL;
+        json = cJSON_CreateArray();
+        if (sqlite3_prepare_v2(db, "select id,bbbb,freq,timestamp,complete,message from messages where id > ?1 order by id asc limit ?2", -1, &stmt, NULL) == SQLITE_OK) {
+                sqlite3_bind_int64(stmt, 1, (sqlite3_int64) since_id);
+                sqlite3_bind_int(stmt, 2, limit);
+                while (sqlite3_step(stmt) == SQLITE_ROW) {
+                        const char *bbbb = (const char *) sqlite3_column_text(stmt, 1);
+                        const char *text = (const char *) sqlite3_column_text(stmt, 5);
+                        char iso[32];
+                        char one[2] = { 0, 0 };
+                        cJSON *m;
+
+                        if (bbbb == NULL || strlen(bbbb) != 4 || text == NULL) continue;
+                        m = cJSON_CreateObject();
+                        cJSON_AddNumberToObject(m, "id", sqlite3_column_int(stmt, 0));
+                        cJSON_AddStringToObject(m, "bbbb", bbbb);
+                        one[0] = bbbb[0]; cJSON_AddStringToObject(m, "station", one);
+                        one[0] = bbbb[1]; cJSON_AddStringToObject(m, "subject", one);
+                        cJSON_AddNumberToObject(m, "number", (bbbb[2] - '0') * 10 + (bbbb[3] - '0'));
+                        cJSON_AddNumberToObject(m, "freq", sqlite3_column_int(stmt, 2));
+                        iso_timestamp((const char *) sqlite3_column_text(stmt, 3), iso, sizeof(iso));
+                        cJSON_AddStringToObject(m, "received", iso);
+                        cJSON_AddBoolToObject(m, "complete", sqlite3_column_type(stmt, 4) == SQLITE_NULL ? 1 : sqlite3_column_int(stmt, 4) != 0);
+                        cJSON_AddStringToObject(m, "message", text);
+                        cJSON_AddItemToArray(json, m);
+                }
+                sqlite3_finalize(stmt);
+        }
+        sqlite3_close(db);
+        json_str = cJSON_PrintUnformatted(json);
+        result = json_str ? strdup(json_str) : NULL;
+        cJSON_free(json_str);
+        cJSON_Delete(json);
+        return result;
+}
+
+// The receiver leaves here what it is doing (source, heartbeat, last phasing
+// on each frequency), so the web side can tell whether it is alive.
+void set_status(const char *tag, const char *value) {
+        sqlite3 *db;
+        sqlite3_stmt *stmt;
+
+        if (tag == NULL || value == NULL) return;
+        open_db(&db);
+        if (db == NULL) return;
+        if (sqlite3_prepare_v2(db, "insert into status (tag,value) values (?1,?2) on conflict(tag) do update set value = excluded.value", -1, &stmt, NULL) == SQLITE_OK) {
+                sqlite3_bind_text(stmt, 1, tag, -1, SQLITE_STATIC);
+                sqlite3_bind_text(stmt, 2, value, -1, SQLITE_STATIC);
+                sqlite3_step(stmt);
+                sqlite3_finalize(stmt);
+        }
+        sqlite3_close(db);
+}
+
+void set_status_now(const char *tag) {
+        char ts[TS_SIZE];
+        char iso[32];
+
+        get_current_timestamp(ts);
+        iso_timestamp(ts, iso, sizeof(iso));
+        set_status(tag, iso);
+}
+
+char *get_status_json(void) {
+        cJSON *json;
+        sqlite3 *db;
+        sqlite3_stmt *stmt;
+        char *json_str, *result;
+        char ts[TS_SIZE], iso[32];
+
+        open_db(&db);
+        if (db == NULL) return NULL;
+        json = cJSON_CreateObject();
+        get_current_timestamp(ts);
+        iso_timestamp(ts, iso, sizeof(iso));
+        cJSON_AddStringToObject(json, "now", iso);
+        if (sqlite3_prepare_v2(db, "select tag,value from status", -1, &stmt, NULL) == SQLITE_OK) {
+                while (sqlite3_step(stmt) == SQLITE_ROW)
+                        if (sqlite3_column_text(stmt, 0) != NULL && sqlite3_column_text(stmt, 1) != NULL)
+                                cJSON_AddStringToObject(json, (const char *) sqlite3_column_text(stmt, 0), (const char *) sqlite3_column_text(stmt, 1));
+                sqlite3_finalize(stmt);
+        }
+        if (sqlite3_prepare_v2(db, "select count(*), coalesce(max(id),0) from messages", -1, &stmt, NULL) == SQLITE_OK) {
+                if (sqlite3_step(stmt) == SQLITE_ROW) {
+                        cJSON_AddNumberToObject(json, "messages", sqlite3_column_int(stmt, 0));
+                        cJSON_AddNumberToObject(json, "last_id", sqlite3_column_int(stmt, 1));
+                }
+                sqlite3_finalize(stmt);
+        }
+        sqlite3_close(db);
+        json_str = cJSON_PrintUnformatted(json);
+        result = json_str ? strdup(json_str) : NULL;
+        cJSON_free(json_str);
+        cJSON_Delete(json);
+        return result;
 }

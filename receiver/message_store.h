@@ -13,4 +13,9 @@ long calculate_time_difference(char *timestamp);
 void free_json_str(char *json_str);
 void purge_old_messages();
 
-
+/* Read-only API for other programs */
+char *get_messages_since(unsigned int since_id, int limit);
+char *get_status_json(void);
+/* What the receiver is doing, for get_status_json() */
+void set_status(const char *tag, const char *value);
+void set_status_now(const char *tag);

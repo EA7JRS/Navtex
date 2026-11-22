@@ -220,6 +220,7 @@ void consume_loop(void)
     unsigned int from, to, num_samples;
     int last_in_idx = in_idx;
     time_t last_sample_time = time(NULL);
+    time_t last_heartbeat = 0;
 
     while(!stop_requested && !device_lost)
     {
@@ -233,6 +234,12 @@ void consume_loop(void)
         {
             last_in_idx = c_in_idx;
             last_sample_time = time(NULL);
+            // tell the web side, once a minute, that samples are arriving
+            if (last_sample_time - last_heartbeat >= 60)
+            {
+                last_heartbeat = last_sample_time;
+                set_status_now("receiver_alive");
+            }
         }
         else if (time(NULL) - last_sample_time > STREAM_TIMEOUT_S)
         {
@@ -760,6 +767,8 @@ int main(int argc, char *argv[])
    signal(SIGTERM, on_stop_signal);
 
    if(debug_mode) { PrepWav(); }
+   set_status("source", source);
+   set_status_now("receiver_started");
 
    // A source only returns when it is asked to stop, when the receiver cannot
    // be opened or when it is lost. Exit instead of staying alive without
