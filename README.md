@@ -30,7 +30,7 @@ Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.c
 | Reglas de un receptor NAVTEX | Recepción buena con menos de un 4 % de errores; cada mensaje se recuerda 72 horas para no repetirlo; los de número 00 se muestran siempre; se comprueba el turno de la letra |
 | Conservar y guardar | Los mensajes no se pueden borrar a mano (MSC.508(105), 6.1.1): salen solos al cumplir su tiempo; marcar mensajes para conservarlos siempre; guardar todos en un archivo de texto o CSV; tiempo de conservación ajustable |
 | Alarma de búsqueda y salvamento | Un mensaje del tema D da una alarma, en pantalla y sonora, que solo se apaga a mano |
-| Salida NMEA 0183 | Cada mensaje nuevo en sentencias `NRX` (forma de Furuno o de la norma IEC 61097-6) y la alarma en `ALR`, por UDP y por un servidor TCP. Por TCP admite `ACK` para apagar la alarma y `NRM` para ver y cambiar desde otro equipo las estaciones y temas que se siguen |
+| Salida NMEA 0183 | Cada mensaje nuevo en sentencias `NRX` (forma de Furuno o de la norma IEC 61097-6) y la alarma en `ALR` (y, si se enciende, con las sentencias de gestión de alertas del puente `ALF`, `ALC` y `HBT`), por UDP y por un servidor TCP. Por TCP admite `ACK` o `ACN` para apagar la alarma y `NRM` para ver y cambiar desde otro equipo las estaciones y temas que se siguen |
 
 ## Estado de las pruebas
 
@@ -42,9 +42,9 @@ Probado el 22-11-2026 en un Intel NUC con Debian 13:
 - la interfaz web desde otros equipos de la red;
 - el descodificador, con dos grabaciones reales de NAVTEX.
 
-Probado el mismo día fuera del NUC, con el programa real y esas grabaciones: las reglas del receptor, el borrado, la exportación, la salida NMEA 0183 por UDP y TCP (sentencias `NRX`, `ALR` y `ACK`) y la alarma de búsqueda y salvamento, esta con un mensaje escrito para la prueba. `make check` repite 103 comprobaciones.
+Probado el mismo día fuera del NUC, con el programa real y esas grabaciones: las reglas del receptor, la exportación, la salida NMEA 0183 por UDP y TCP (sentencias `NRX`, `ALR`, `ACK`, `NRM` y las de gestión de alertas del puente `ALF`, `ALC`, `HBT`, `ACN` y `ARC`) y la alarma de búsqueda y salvamento, esta con un mensaje escrito para la prueba y nunca emitido. `make check` repite 113 comprobaciones.
 
-**Sin probar todavía:** la recepción de un mensaje completo del aire, una emisión real en 4209,5 kHz, y la salida NMEA 0183 con un plotter. El detalle de cada parte está en el [historial de cambios](CHANGELOG.md).
+**Sin probar todavía:** la recepción de un mensaje completo del aire, una emisión real en 4209,5 kHz, la salida NMEA 0183 con un plotter y la gestión de alertas con un equipo de puente real. El detalle de cada parte está en el [historial de cambios](CHANGELOG.md).
 
 ## Vista previa
 
@@ -543,4 +543,5 @@ Si te resulta útil: [paypal.me/ea7jrs](https://paypal.me/ea7jrs)
 
 ## Previsto
 
-- Las sentencias de gestión de alertas del puente (MSC.508(105), 9.4; IEC 62923).
+- Confirmar con las normas (IEC 62923 y la enmienda de 2019 de IEC 61097-6, de pago) el identificador, la categoría y la prioridad de la alerta de búsqueda y salvamento en la gestión de alertas del puente. Las sentencias ya están hechas desde la 1.7.0 (véase [Salida NMEA 0183](#salida-nmea-0183)); esos tres valores se pusieron sin poder leerlas.
+- Probarlo con un equipo de puente real, y la salida NMEA 0183 con un plotter.
