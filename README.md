@@ -15,7 +15,7 @@ Next to that I created a web-based GUI application for displaying messages. The 
 Note that the sdr code is written exclusively for sdrplay devices. The reason is that these are high quality devices, with a fairly well documented API, and with good developer support.
 
 # Installation
-Before installing this software, make sure to install the sdrplay API version 3.15 or higher (https://www.sdrplay.com/api/)
+Before installing this software, make sure to install the sdrplay API version 3.15 or higher (https://www.sdrplay.com/api/) if you use an SDRplay receiver, and/or librtlsdr-dev for RTL-SDR dongles (see the fork notes below)
 
 
 
@@ -80,10 +80,41 @@ Base de datos e instalación:
 - `make install` ya no sustituye una base de datos existente por una vacía (se perdían los mensajes y la configuración) ni anida `build/build`.
 - La carpeta `/opt/Navtex` y la base de datos dejan de ser escribibles por cualquiera (`777`/`666` → `775`/`664`) y pasan a ser del usuario que ejecuta `sudo make install`.
 
+### Fase 2 · receptores RTL-SDR y grabaciones
+
+El receptor ya no depende de un solo tipo de equipo. La entrada de muestras está separada del descodificador (`receiver/iq_source.h`) y hay tres orígenes:
+
+| Origen | Opción | Notas |
+| :--- | :--- | :--- |
+| SDRplay | `-s sdrplay` | Como hasta ahora. Es el origen por defecto si la API de SDRplay está instalada al compilar. |
+| RTL-SDR | `-s rtlsdr` | Necesita `librtlsdr-dev` al compilar. Ver abajo cómo llegar a 518 kHz. |
+| Grabación | `-f archivo` | Descodifica una grabación en vez de un receptor: para pruebas y para repasar una recepción dudosa. |
+
+`./configure` detecta qué bibliotecas hay y dice al final qué receptores quedan incluidos (`receivers: SDRplay yes, RTL-SDR yes`). Ninguna de las dos es obligatoria.
+
+```
+sudo apt-get install librtlsdr-dev
+```
+
+Un RTL-SDR no sintoniza por sí solo 490 y 518 kHz. Hay tres formas de llegar:
+
+| Equipo | Orden |
+| :--- | :--- |
+| Muestreo directo (RTL-SDR Blog V3 y similares, antena a la entrada de HF, rama Q) | `navtexreceiver -s rtlsdr` (equivale a `-D 2`; rama I: `-D 1`) |
+| Conversor integrado (RTL-SDR Blog V4) | `navtexreceiver -s rtlsdr -D 0` |
+| Conversor externo (por ejemplo, de 125 MHz) | `navtexreceiver -s rtlsdr -u 125000000` |
+
+Otras opciones del RTL-SDR: `-i` índice del equipo, `-g` ganancia del sintonizador en dB (automática si no se da; no se usa en muestreo directo), `-P` corrección en ppm y `-b` alimentación por el coaxial. `navtexreceiver -h` las lista todas.
+
+Con 8 bits y sin filtros de entrada, un RTL-SDR recibe NAVTEX peor que un SDRplay: en onda media las emisoras de radiodifusión cercanas lo saturan con facilidad. Un filtro paso bajo o una antena activa sintonizada ayudan mucho.
+
+Grabaciones: 252 000 muestras por segundo centradas en 504 kHz, en `.wav` de 16 bits con I y Q en los dos canales (lo que escribe la opción `-d`) o en bruto de 8 bits sin signo (lo que escribe `rtl_sdr -s 252000`). Con `-t` se reproduce a velocidad real.
+
+Probado: la cadena completa, desde el archivo de muestras hasta el texto, con dos recepciones reales de NAVTEX colocadas a la vez en 518 y 490 kHz, en los dos formatos de archivo. El origen RTL-SDR compila y enlaza con `librtlsdr` y falla con un mensaje claro si no hay equipo; **falta probarlo con un RTL-SDR real**. El origen SDRplay se ha reorganizado sin cambiar sus ajustes; **falta probarlo en un equipo con la API de SDRplay**.
+
 ### Previsto
 
 - Servicios de systemd, sin `root` y en alternancia con otros programas que usen el mismo receptor.
-- Receptores RTL-SDR, además de los SDRplay.
 - Salida de los mensajes hacia S.A.T.-APRS+ y hacia NMEA 2000.
 - Interfaz web nueva, en español.
 

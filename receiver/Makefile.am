@@ -1,7 +1,7 @@
 bin_PROGRAMS = navtexreceiver
-navtexreceiver_SOURCES = capt_sched.c  message_store.c  decoder.C  fir1cpp.C  fir2cpp.C  fir3cpp.C  nav_b_sm.C  nav_sched.C capt_sched.h  decoder.h  fir1cpp.h  fir2cpp.h  fir3cpp.h  message_store.h  nav_b_sm.h  nav_sched.h wav.c
+navtexreceiver_SOURCES = capt_sched.c  message_store.c  decoder.C  fir1cpp.C  fir2cpp.C  fir3cpp.C  nav_b_sm.C  nav_sched.C capt_sched.h  decoder.h  fir1cpp.h  fir2cpp.h  fir3cpp.h  message_store.h  nav_b_sm.h  nav_sched.h wav.c wav.h iq_source.h rtl_source.c file_source.c
 AM_CFLAGS= -I/usr/local/lib  -I/usr/local/include
-navtexreceiver_LDADD =  -L/usr/local/lib -lsdrplay_api  -lcjson -ldl -lm -lsqlite3
+navtexreceiver_LDADD =  -L/usr/local/lib $(RECEIVER_LIBS)  -lcjson -ldl -lm -lsqlite3
 navtexreceiver_LDFLAGS =  -pthread 
 #pkgdata_DATA = Navtex.db
 

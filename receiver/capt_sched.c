@@ -10,10 +10,13 @@
 #include <time.h>
 #include <sys/wait.h>
 #include <signal.h>
+#ifdef HAVE_LIBSDRPLAY_API
 #include "sdrplay_api.h"
 #include "sdrplay_api_dev.h"
+#endif
 #include "message_store.h"
 #include "wav.h"
+#include "iq_source.h"
 
 void init_fir_filter1();
 void sample_in_1(double sample_I,double sample_Q);
@@ -45,12 +48,12 @@ void init_fir2_wrapper();
 
 short debug_mode;
 
+struct iq_options iq_opt = { 0, 'A', 0, -1, 0, -1, 0, NULL, 0 };
+
 // Set by SIGINT/SIGTERM: stop streaming and release the receiver cleanly.
-static volatile sig_atomic_t stop_requested = 0;
+volatile sig_atomic_t stop_requested = 0;
 // Set when the receiver is unplugged or stops delivering samples.
-static volatile sig_atomic_t device_lost = 0;
-// The capture thread ended because it was asked to (exit code 0) or not (1).
-static int capture_failed = 1;
+volatile sig_atomic_t device_lost = 0;
 
 // Seconds without new samples before the receiver is considered lost.
 #define STREAM_TIMEOUT_S 15
@@ -72,7 +75,9 @@ pthread_mutex_t mutex=PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t in_mutex=PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t out_mutex=PTHREAD_MUTEX_INITIALIZER;
 
+#ifdef HAVE_LIBSDRPLAY_API
 sdrplay_api_DeviceT *chosenDevice = NULL;
+#endif
 
 
 short *sample_buffer;
@@ -80,8 +85,8 @@ unsigned int s_buffer_size;
 int in_idx, out_idx;
 
 
-unsigned char biasTflag = 0;
-char selectedAntennaPort = 'A';
+#define biasTflag ((unsigned char) iq_opt.bias_t)
+#define selectedAntennaPort (iq_opt.antenna_port)
 
 
 
@@ -119,14 +124,30 @@ void EndWav()
 
 
 
-void StreamACallback(short *xi, short *xq, sdrplay_api_StreamCbParamsT *params, unsigned int numSamples, unsigned int reset, void *cbContext)
+///////////// RING BUFFER (any source -> demodulator) /////////////
+
+int iq_ring_init(void)
+{
+    s_buffer_size = in_sample_rate*2*8;   // *2 for I and Q; *8 for 8 seconds of buffer; s_buffer_size must be a multiple of 2
+    sample_buffer = malloc(s_buffer_size*sizeof(short));
+    in_idx  = 1;  // should not be zero!!
+    out_idx = 1; // idem
+    return sample_buffer != NULL ? 0 : -1;
+}
+
+void iq_ring_free(void)
+{
+    free(sample_buffer);
+    sample_buffer = NULL;
+}
+
+void iq_push_short(const short *xi, const short *xq, unsigned int numSamples)
 {
     unsigned int i; 
     unsigned int next_idx;
 
     //protect this function, since it can be called multiple times 
     pthread_mutex_lock(&mutex);
-
 
     pthread_mutex_lock(&in_mutex);
     next_idx = in_idx+1; 
@@ -159,9 +180,87 @@ void StreamACallback(short *xi, short *xq, sdrplay_api_StreamCbParamsT *params, 
     pthread_mutex_unlock(&in_mutex);
     
     pthread_mutex_unlock(&mutex);
+}
 
-    return;
+// RTL-SDR samples: unsigned 8 bit, I then Q. Scaled to the 16 bit range the
+// rest of the chain was written for (the demodulator only looks at the phase).
+void iq_push_u8(const unsigned char *iq, unsigned int num_bytes)
+{
+    short bi[4096], bq[4096];
+    unsigned int pairs = num_bytes / 2;
+    unsigned int done = 0;
 
+    while (done < pairs)
+    {
+        unsigned int n = pairs - done;
+        unsigned int i;
+        if (n > 4096) n = 4096;
+        for (i = 0; i < n; i++)
+        {
+            bi[i] = (short) ((iq[2*(done+i)]   * 2 - 255) * 64);
+            bq[i] = (short) ((iq[2*(done+i)+1] * 2 - 255) * 64);
+        }
+        iq_push_short(bi, bq, n);
+        done += n;
+    }
+}
+
+void iq_demodulate_short(const short *interleaved_iq, unsigned int num_pairs)
+{
+    unsigned int i;
+    for (i = 0; i < num_pairs; i++)
+        sample_in_1((double) interleaved_iq[2*i], (double) interleaved_iq[2*i+1]);
+    if (debug_mode) wav_write(fp, (void *) interleaved_iq, num_pairs);
+}
+
+/////// MAIN CONSUMER LOOP ///////
+void consume_loop(void)
+{
+    int c_in_idx;
+    unsigned int from, to, num_samples;
+    int last_in_idx = in_idx;
+    time_t last_sample_time = time(NULL);
+
+    while(!stop_requested && !device_lost)
+    {
+	usleep(50000);
+	pthread_mutex_lock(&in_mutex);
+	c_in_idx = in_idx;
+	pthread_mutex_unlock(&in_mutex);
+
+        // Watchdog: the source must keep moving in_idx
+        if (c_in_idx != last_in_idx)
+        {
+            last_in_idx = c_in_idx;
+            last_sample_time = time(NULL);
+        }
+        else if (time(NULL) - last_sample_time > STREAM_TIMEOUT_S)
+        {
+            printf("No samples from the receiver for %d s - giving up\n", STREAM_TIMEOUT_S);
+            device_lost = 1;
+        }
+
+	while(out_idx != c_in_idx)
+	{
+		from = out_idx+1;
+		from %= s_buffer_size ;
+		to = c_in_idx;
+		if(from>to)
+		{
+			to=s_buffer_size-1;
+		}
+		num_samples=(to-from+1);  //one sample is an I or a Q value
+		iq_demodulate_short(&sample_buffer[from], num_samples/2);
+		out_idx = to;
+	}
+    }
+}
+
+#ifdef HAVE_LIBSDRPLAY_API
+///////////// SDRPLAY SOURCE /////////////
+void StreamACallback(short *xi, short *xq, sdrplay_api_StreamCbParamsT *params, unsigned int numSamples, unsigned int reset, void *cbContext)
+{
+    iq_push_short(xi, xq, numSamples);
 }
 
 void StreamBCallback(short *xi, short *xq, sdrplay_api_StreamCbParamsT *params, unsigned int numSamples, unsigned int reset, void *cbContext)
@@ -238,31 +337,25 @@ void EventCallback(sdrplay_api_EventT eventId, sdrplay_api_TunerSelectT tuner, s
 
 
 
-void *captureIQ(void *prt)
+int sdrplay_source_run(void)
 {
+    int failed = 1;
     sdrplay_api_DeviceT devs[6];
     unsigned int ndev;
     int i;
-    int c_in_idx;
     float ver = 0.0;
     sdrplay_api_ErrT err;
     sdrplay_api_DeviceParamsT *deviceParams = NULL;
     sdrplay_api_CallbackFnsT cbFns;
     sdrplay_api_RxChannelParamsT *chParams;
-    unsigned int byte_count = 0;
-    unsigned int num_samples;
-    int num_bytes_to_be_collected; 
-
     int reqTuner = 0;
     int master_slave = 0;
 
     unsigned int chosenIdx = 0;
-    unsigned int from,to;
     
     printf("requested Tuner%c Mode=%s\n", (reqTuner == 0)? 'A': 'B', (master_slave == 0)?
                "Single_Tuner": "Master/Slave");
    
-    num_bytes_to_be_collected = wav_sample_rate* 60*15 *2*sizeof(short);  // *2 for I and Q ; 15 minutes
     // Open API//////////
     if ((err = sdrplay_api_Open()) != sdrplay_api_Success)
     {
@@ -458,10 +551,7 @@ void *captureIQ(void *prt)
 
 
 
-   	    s_buffer_size = in_sample_rate*2*8;   // *2 for I and Q; *8 for 8 seconds of buffer; s_buffer_size must be a multiple of 2
-	    sample_buffer = malloc(s_buffer_size*sizeof(short)); 
-            in_idx  = 1;  // should not be zero!!
-	    out_idx = 1; // idem
+            if (iq_ring_init() != 0) { printf("out of memory\n"); goto CloseApi; }
 
 	    //////////////////// LET'S START ///////////////////////////////////
             // Now we're ready to start by calling the initialisation function
@@ -495,80 +585,14 @@ void *captureIQ(void *prt)
             }
 
 
- 	    /////// MAIN CONSUMER LOOP ///////
-            int go_on=1;
-            int last_in_idx = in_idx;
-            time_t last_sample_time = time(NULL);
-	    if(debug_mode) { PrepWav(); }
-
-	    while(go_on && !stop_requested && !device_lost)
-	    {
-		usleep(50000);
-    		pthread_mutex_lock(&in_mutex);
-	  	c_in_idx = in_idx;
-    		pthread_mutex_unlock(&in_mutex);
-
-                // Watchdog: the stream callback must keep moving in_idx
-                if (c_in_idx != last_in_idx)
-                {
-                    last_in_idx = c_in_idx;
-                    last_sample_time = time(NULL);
-                }
-                else if (time(NULL) - last_sample_time > STREAM_TIMEOUT_S)
-                {
-                    printf("No samples from the receiver for %d s - giving up\n", STREAM_TIMEOUT_S);
-                    device_lost = 1;
-                }
-
-
-           	while(out_idx != c_in_idx)
-	        {
-			int i;
-			int index;
-
-                	from = out_idx+1;
-        		from %= s_buffer_size ;
-			to = c_in_idx;
-			if(from>to)
-			{
-				to=s_buffer_size-1;
-			}
-                        //time to transfer  from from to to
-			num_samples=(to-from+1);  //one sample is an I or a Q value
-			//num_bytes=num_samples*sizeof(short);
-
-			index=from;
-			for(i=0;i<num_samples;i+=2)
-			{
-		           sample_in_1((double) sample_buffer[index],(double) sample_buffer[index+1]);
-			   index+=2;
-			} 
-
-
-                         if(debug_mode) {wav_write(fp, (void*)(&sample_buffer[from]), num_samples/2);}
-
-
-			//byte_count += num_bytes;
-			//printf("out_bytecount=%u\n",byte_count);
-		 	out_idx = to;	
-		}		
-                if( (byte_count >= num_bytes_to_be_collected) && go_on)
-                {
-                   go_on=0;
-	    	   if(debug_mode) { EndWav(); }
-                }
-	    }
-
-
-
-            if(debug_mode && go_on) { EndWav(); }
-            capture_failed = device_lost ? 1 : 0;
+            consume_loop();
+            failed = device_lost ? 1 : 0;
             if (stop_requested) printf("Stop requested - releasing the receiver\n");
 
             // Stop streaming, then release the device (make it available to other applications)
             if (!device_lost) sdrplay_api_Uninit(chosenDevice->dev);
             sdrplay_api_ReleaseDevice(chosenDevice);
-   	    free(sample_buffer);  
+            iq_ring_free();
         }
 UnlockDeviceAndCloseApi:
         // Unlock API
@@ -578,7 +602,15 @@ CloseApi:
         // Close API
         sdrplay_api_Close();
     }
+    return failed;
 }
+#else
+int sdrplay_source_run(void)
+{
+    printf("This build has no SDRplay support (the SDRplay API was not found when it was compiled)\n");
+    return 1;
+}
+#endif /* HAVE_LIBSDRPLAY_API */
 
 
 
@@ -592,13 +624,34 @@ void init_dsp()
 }
 
 
+static void usage(const char *prog)
+{
+    printf(
+"Usage: %s [options]\n"
+"  -s source   sdrplay | rtlsdr | file   (default: sdrplay when built in, else rtlsdr)\n"
+"  -b          bias T on: power an active antenna through the coax\n"
+"  -d          debug: also write the received I/Q to a wav file\n"
+"SDRplay:\n"
+"  -p port     antenna port A, B or C (RSPdx, RSPdx-R2)\n"
+"RTL-SDR:\n"
+"  -i index    device index (default 0)\n"
+"  -D mode     direct sampling: 0 off, 1 I branch, 2 Q branch\n"
+"              (default 2; 0 when -u is given). Use 0 with an RTL-SDR Blog V4.\n"
+"  -u hertz    local oscillator of an external upconverter, e.g. 125000000\n"
+"  -g gain     tuner gain in dB, e.g. 28.0 (default: automatic). Not used in direct sampling.\n"
+"  -P ppm      crystal correction\n"
+"Recording:\n"
+"  -f file     decode a recording instead of a receiver: 252000 S/s centred on 504 kHz,\n"
+"              .wav (16 bit, I and Q as the two channels, as written by -d)\n"
+"              or raw unsigned 8 bit I/Q (as written by rtl_sdr)\n"
+"  -t          play the recording at real speed\n", prog);
+}
+
 int main(int argc, char *argv[])
 {
-
-
- char *pvalue = NULL;
- int index;
- int c;
+  int c;
+  int failed;
+  const char *source = NULL;
 
   opterr = 0;
   debug_mode=0;
@@ -606,33 +659,61 @@ int main(int argc, char *argv[])
   // line-buffered output, so the messages reach the journal as they happen
   setvbuf(stdout, NULL, _IOLBF, 0);
 
-  while ((c = getopt (argc, argv, "bdp:")) != -1) {
+  while ((c = getopt (argc, argv, "bdhts:p:i:D:u:g:P:f:")) != -1) {
     switch (c)
       {
       case 'b':
-        biasTflag = (unsigned char)1;
+        iq_opt.bias_t = 1;
 	printf("set BiasT active\n");
         break;
       case 'd':
         debug_mode=1;
-	printf("debug mode enabled, wav file of first 15min of IQ samples will be produced\n");
+	printf("debug mode enabled, a wav file with the received IQ samples will be produced\n");
+        break;
+      case 'h':
+        usage(argv[0]);
+        return 0;
+      case 't':
+        iq_opt.file_realtime = 1;
+        break;
+      case 's':
+        source = optarg;
         break;
       case 'p':
-        pvalue = optarg;
-	if(strcmp(pvalue,"A")==0) 
-		selectedAntennaPort = 'A';
-        else if(strcmp(pvalue,"B")==0)
-		selectedAntennaPort = 'B';
-        else if(strcmp(pvalue,"C")==0)
-		selectedAntennaPort = 'C';
-        else if(strcmp(pvalue,"Z")==0)
-		selectedAntennaPort = 'C';
+	if(strcmp(optarg,"A")==0) 
+		iq_opt.antenna_port = 'A';
+        else if(strcmp(optarg,"B")==0)
+		iq_opt.antenna_port = 'B';
+        else if(strcmp(optarg,"C")==0)
+		iq_opt.antenna_port = 'C';
+        else if(strcmp(optarg,"Z")==0)
+		iq_opt.antenna_port = 'C';
 	else { printf("invalid antenna port option\n"); return 1; }
-
-	printf("Antenna port selected: %c\n",selectedAntennaPort);
+	printf("Antenna port selected: %c\n",iq_opt.antenna_port);
+        break;
+      case 'i':
+        iq_opt.rtl_index = atoi(optarg);
+        break;
+      case 'D':
+        iq_opt.rtl_direct_sampling = atoi(optarg);
+        if (iq_opt.rtl_direct_sampling < 0 || iq_opt.rtl_direct_sampling > 2) { printf("invalid direct sampling mode (0, 1 or 2)\n"); return 1; }
+        break;
+      case 'u':
+        iq_opt.rtl_upconverter_hz = atol(optarg);
+        if (iq_opt.rtl_upconverter_hz < 0) { printf("invalid upconverter frequency\n"); return 1; }
+        break;
+      case 'g':
+        iq_opt.rtl_gain_tenths = (int) (atof(optarg) * 10.0 + 0.5);
+        if (iq_opt.rtl_gain_tenths < 0) { printf("invalid gain\n"); return 1; }
+        break;
+      case 'P':
+        iq_opt.rtl_ppm = atoi(optarg);
+        break;
+      case 'f':
+        iq_opt.file_path = optarg;
         break;
       case '?':
-        if (optopt == 'p')
+        if (optopt != 0 && strchr("spiDugPf", optopt) != NULL)
           fprintf (stderr, "Option -%c requires an argument.\n", optopt);
         else if (isprint (optopt))
           fprintf (stderr, "Unknown option `-%c'.\n", optopt);
@@ -640,33 +721,49 @@ int main(int argc, char *argv[])
           fprintf (stderr,
                    "Unknown option character `\\x%x'.\n",
                    optopt);
+        usage(argv[0]);
         return 1;
       default:
         abort ();
     }
   }
 
-    pthread_t thread2;
-    
+   if (source == NULL)
+   {
+       if (iq_opt.file_path != NULL) source = "file";
+       else
+#ifdef HAVE_LIBSDRPLAY_API
+           source = "sdrplay";
+#else
+           source = "rtlsdr";
+#endif
+   }
+   // an external upconverter means the tuner is used, unless told otherwise
+   if (iq_opt.rtl_direct_sampling < 0)
+       iq_opt.rtl_direct_sampling = (iq_opt.rtl_upconverter_hz > 0) ? 0 : 2;
+
    init_dsp();
    init_fir2_wrapper();
-
-
 
    signal(SIGINT, on_stop_signal);
    signal(SIGTERM, on_stop_signal);
 
-   pthread_create( &thread2, (pthread_attr_t *)NULL, captureIQ, (void *) NULL ); 
+   if(debug_mode) { PrepWav(); }
 
-   // The capture thread only returns when it is asked to stop, when the
-   // receiver cannot be opened or when it is lost. Exit instead of staying
-   // alive without receiving: a service manager can then restart us.
-   pthread_join(thread2, NULL);
-   if (capture_failed && !stop_requested)
+   // A source only returns when it is asked to stop, when the receiver cannot
+   // be opened or when it is lost. Exit instead of staying alive without
+   // receiving: a service manager can then restart us.
+   if (strcmp(source, "sdrplay") == 0)      failed = sdrplay_source_run();
+   else if (strcmp(source, "rtlsdr") == 0)  failed = rtlsdr_source_run();
+   else if (strcmp(source, "file") == 0)    failed = file_source_run();
+   else { printf("unknown source '%s' (sdrplay, rtlsdr or file)\n", source); return 1; }
+
+   if(debug_mode) { EndWav(); }
+
+   if (failed && !stop_requested)
    {
 	printf("Receiver not available - exiting\n");
 	return 1;
    }
    return 0;
 }
-
