@@ -2,6 +2,19 @@
 
 Fork EA7JRS/Navtex del receptor NAVTEX de bartelvdh. Las entradas dicen también qué se probó y qué no. Lo descrito en una fase puede haber cambiado en las posteriores (por ejemplo, los servicios y sus ajustes): el estado actual es el del [README](README.md).
 
+## [1.3.0] - 2026-11-22
+
+### Alarma de búsqueda y salvamento y sentencias de la norma IEC 61097-6
+
+- **Alarma del tema D.** Un mensaje de búsqueda y salvamento da una alarma que solo se apaga a mano (OMI MSC.148(77), 7.1; IEC 61097-6, 4.3.9): aviso rojo arriba de la interfaz, con pitido, y botón «Reconocer la alarma». El mensaje se muestra aunque no se siga esa estación; su repetición no vuelve a disparar la alarma.
+- **`ALR` y `ACK`.** Por la salida NMEA 0183, la alarma sale en la sentencia `ALR` (número 003) cada 30 segundos hasta que se reconoce, y se puede reconocer desde otro equipo con `ACK` por el servidor TCP.
+- **`NRX` en la forma de la norma** (IEC 61097-6, anexo C), además de la de Furuno, que sigue de serie. Se elige en Receptores.
+- API: `alarm` en los mensajes, `sar_alarms` en `/api/status` y `POST /api/alarm/ack`.
+- `make check`: 87 comprobaciones; la suma de control se contrasta con el ejemplo de la propia norma.
+- Probado con el programa real: mensaje D escrito para la prueba (no recibido), `ALR` cada 30 s y `ACK` por TCP con `nc`, y la interfaz en un navegador. No probado con un plotter ni con otro equipo que mande `ACK`. El pitido no se ha podido oír en la prueba.
+
+---
+
 ## [1.2.0] - 2026-11-22
 
 ### Reglas de un receptor NAVTEX, borrar, guardar y salida NMEA 0183

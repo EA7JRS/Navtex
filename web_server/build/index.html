@@ -41,6 +41,10 @@
   <main>
     <section class="estado" aria-label="Estado" id="estado"></section>
 
+    <div class="alarma" id="alarma" role="alert" hidden>
+      <p><strong>Alarma.</strong> <span id="alarma-texto"></span></p>
+      <button type="button" class="boton" id="reconocer">Reconocer la alarma</button>
+    </div>
     <p class="aviso" id="error-general" hidden></p>
 
     <section id="vista-mensajes" aria-label="Mensajes">
@@ -102,7 +106,7 @@
       <div class="tarjeta" id="tarjeta-salida">
         <h2>Mensajes: conservación y salida NMEA</h2>
         <div id="salida"></div>
-        <p class="nota">Un receptor NAVTEX recuerda cada mensaje 72 horas para no repetirlo; aquí además se puede conservar más tiempo mientras la estación lo siga emitiendo. La salida NMEA 0183 manda cada mensaje nuevo en sentencias <span class="mono">NRX</span> (la forma de los receptores Furuno, la misma de la app y el plotter APRS LoRa+). No tiene contraseña: solo en una red de confianza.</p>
+        <p class="nota">Un receptor NAVTEX recuerda cada mensaje 72 horas para no repetirlo; aquí además se puede conservar más tiempo mientras la estación lo siga emitiendo. La salida NMEA 0183 manda cada mensaje nuevo en sentencias <span class="mono">NRX</span>, y la alarma de búsqueda y salvamento en la sentencia <span class="mono">ALR</span> cada 30 segundos hasta que se reconoce; por TCP admite la sentencia <span class="mono">ACK</span> para reconocerla desde otro equipo. No tiene contraseña: solo en una red de confianza.</p>
       </div>
       <p class="aviso" id="estado-receptores" hidden></p>
       <p class="nota">Un equipo solo lo puede usar un programa a la vez. Si el receptor dice «sin equipo», puede estar desconectado o en uso por otro programa (por ejemplo, SDRconnect o SDR++): el receptor lo sigue intentando cada 15 segundos.</p>

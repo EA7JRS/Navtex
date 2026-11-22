@@ -8,7 +8,8 @@
  * sentence of NMEA 0183 / IEC 61162-1 (IMO MSC.148(77), 9: "at least one
  * interface for the transfer of received data to other navigation or
  * communication equipment"). The sentences go out by UDP and to the clients
- * of a small TCP server. Nothing is ever read from those clients.
+ * of a small TCP server. The only thing taken from those clients is the ACK
+ * sentence that resets the search and rescue alarm.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +19,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <pthread.h>
+#include <time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -83,8 +85,105 @@ add_sentence (char **buf, size_t *len, size_t *cap, const char *head_fmt, int li
   return append (buf, len, cap, "$", 1) && append (buf, len, cap, body, strlen (body)) && append (buf, len, cap, tail, strlen (tail));
 }
 
+static int
+add_raw (char **buf, size_t *len, size_t *cap, const char *body)
+{
+  char tail[8];
+  unsigned char sum = 0;
+  size_t i;
+  for (i = 0; body[i] != '\0'; i++) sum ^= (unsigned char) body[i];
+  snprintf (tail, sizeof (tail), "*%02X\r\n", sum);
+  return append (buf, len, cap, "$", 1) && append (buf, len, cap, body, strlen (body)) && append (buf, len, cap, tail, strlen (tail));
+}
+
+/* IEC 61097-6, annex C: the body is one stream of characters cut into sentences */
+static char *
+nrx_iec (const char *bbbb, int freq, int y, int mo, int d, int h, int mi, const char *body, int seq, int complete)
+{
+  char *esc, *out = NULL;
+  size_t olen = 0, ocap = 0, n = strlen (body), e = 0, at, i, chars = 0;
+  int total, line, ok = 1, bad = count_bad_characters (body);
+  char first[80], next[40], sentence[128];
+  size_t room_first, room_next;
+
+  esc = (char *) malloc (n * 6 + 1);
+  if (esc == NULL) return NULL;
+  for (i = 0; i < n; i++)
+    {
+      unsigned char c = (unsigned char) body[i];
+      if (c == '\r') continue;
+      if (c == '\n') { memcpy (esc + e, "^0D^0A", 6); e += 6; chars += 2; continue; }   /* a line end is two characters */
+      chars++;
+      if (strchr (",*$!\\^~", c) != NULL || c < 32 || c > 126) e += (size_t) sprintf (esc + e, "^%02X", c);
+      else esc[e++] = (char) c;
+    }
+  esc[e] = '\0';
+
+  /* frequency table index: 1 = 490 kHz, 2 = 518 kHz, 3 = 4209.5 kHz */
+  snprintf (first, sizeof (first), ",%02d,%.4s,%d,%02d%02d00,%02d,%02d,%04d,%d,%d,%c,", seq % 100, bbbb,
+            freq == 490 ? 1 : freq == 4209 ? 3 : 2, h, mi, d, mo, y, (int) chars, bad, complete ? 'A' : 'V');
+  snprintf (next, sizeof (next), ",%02d,,,,,,,,,,", seq % 100);
+  /* 82 = "$CRNRX,nnn,nnn" + fields + text + "*hh" */
+  room_first = (size_t) MAX_SENTENCE - 17 - strlen (first);
+  room_next = (size_t) MAX_SENTENCE - 17 - strlen (next);
+
+  /* how many sentences: the first holds less than the others; an escape is never cut */
+  for (total = 0, at = 0; at < e || total == 0; total++)
+    {
+      size_t take = e - at < (total == 0 ? room_first : room_next) ? e - at : (total == 0 ? room_first : room_next);
+      if (take < e - at)
+        for (i = 1; i <= 2 && i <= take; i++)
+          if (esc[at + take - i] == '^') { take -= i; break; }
+      at += take;
+      if (total >= 998) break;
+    }
+  for (line = 1, at = 0; ok && line <= total; line++)
+    {
+      size_t room = line == 1 ? room_first : room_next;
+      size_t take = e - at < room ? e - at : room;
+      if (take < e - at)
+        for (i = 1; i <= 2 && i <= take; i++)
+          if (esc[at + take - i] == '^') { take -= i; break; }
+      snprintf (sentence, sizeof (sentence), "CRNRX,%03d,%03d%s%.*s", total, line, line == 1 ? first : next, (int) take, esc + at);
+      ok = add_raw (&out, &olen, &ocap, sentence);
+      at += take;
+    }
+  free (esc);
+  if (!ok) { free (out); return NULL; }
+  return out;
+}
+
+void
+alr_sentence (char *out, size_t out_size, int hhmmss, int active, int acknowledged)
+{
+  char body[80];
+  unsigned char sum = 0;
+  size_t i;
+
+  snprintf (body, sizeof (body), "CRALR,%06d.00,003,%c,%c,NAVTEX: Search and rescue information", hhmmss, active ? 'A' : 'V', acknowledged ? 'A' : 'V');
+  for (i = 0; body[i] != '\0'; i++) sum ^= (unsigned char) body[i];
+  snprintf (out, out_size, "$%s*%02X\r\n", body, sum);
+}
+
+int
+is_alarm_ack (const char *text)
+{
+  const char *p;
+
+  for (p = text; (p = strchr (p, '$')) != NULL; p++)
+    {
+      unsigned char sum = 0;
+      unsigned int given = 0, number = 0;
+      const char *q;
+      for (q = p + 1; *q != '\0' && *q != '*' && *q != '\r' && *q != '\n' && q - p < 40; q++) sum ^= (unsigned char) *q;
+      if (*q != '*' || sscanf (q + 1, "%2X", &given) != 1 || given != sum) continue;
+      if (q - p >= 9 && strncmp (p + 3, "ACK,", 4) == 0 && sscanf (p + 7, "%3u", &number) == 1 && number == 3) return 1;
+    }
+  return 0;
+}
+
 char *
-nrx_sentences (const char *bbbb, int freq, const char *received, const char *message)
+nrx_sentences (const char *bbbb, int freq, const char *received, const char *message, int iec, int seq, int complete)
 {
   char head[96];
   char *pieces = NULL;             /* the pieces, one after another, each ended with '\n' */
@@ -109,6 +208,8 @@ nrx_sentences (const char *bbbb, int freq, const char *received, const char *mes
       const char *nl = strchr (body, '\n');
       body = nl != NULL ? nl + 1 : body + strlen (body);
     }
+
+  if (iec) return nrx_iec (bbbb, freq, y, mo, d, h, mi, body, seq, complete);
 
   snprintf (head, sizeof (head), "CRNRX,%.4s,%%d,%%d,%s,%02d,%02d,%04d,%02d%02d00,%.1f,", bbbb,
             freq == 4209 ? "4209" : freq == 490 ? "490" : "518", d, mo, y, h, mi, length > 0 ? 100.0 * errors / length : 0.0);
@@ -237,10 +338,16 @@ send_tcp (const char *text, size_t n)
   int i;
   for (i = 0; i < MAX_CLIENTS; i++)
     {
-      char junk[64];
+      char said[128];
       ssize_t r;
       if (clients[i] < 0) continue;
-      r = recv (clients[i], junk, sizeof (junk), 0);        /* what a client says is thrown away */
+      /* The only thing a client can say: the ACK sentence that resets the alarm (IEC 61097-6, 8.4.2) */
+      r = recv (clients[i], said, sizeof (said) - 1, 0);
+      if (r > 0)
+        {
+          said[r] = '\0';
+          if (is_alarm_ack (said) && acknowledge_alarms () > 0) { printf ("NRX: alarm acknowledged by a TCP client\n"); fflush (stdout); }
+        }
       if (r == 0 || (r < 0 && errno != EAGAIN && errno != EWOULDBLOCK) ||
           (text != NULL && send (clients[i], text, n, MSG_NOSIGNAL) != (ssize_t) n))
         {
@@ -297,21 +404,34 @@ stored_last_id (void)
   return id;
 }
 
+static int
+utc_hhmmss (void)
+{
+  time_t now = time (NULL);
+  struct tm t;
+  gmtime_r (&now, &t);
+  return t.tm_hour * 10000 + t.tm_min * 100 + t.tm_sec;
+}
+
 static void *
 sender (void *arg)
 {
   int i;
+  int seq = 0, alarm_was = 0;
+  time_t last_alr = 0;
   (void) arg;
   for (i = 0; i < MAX_CLIENTS; i++) clients[i] = -1;
   for (;;)
     {
-      char udp[96], tcp[16];
-      int port, count = 0;
+      char udp[96], tcp[16], format[16];
+      int port, count = 0, iec, alarms;
       char *ml;
       cJSON *list, *m;
 
       get_setting ("nrx.udp", udp, sizeof (udp));
       get_setting ("nrx.tcp", tcp, sizeof (tcp));
+      get_setting ("nrx.format", format, sizeof (format));
+      iec = strcmp (format, "iec") == 0;
       port = atoi (tcp);
       serve_tcp (port);
       send_tcp (NULL, 0);
@@ -327,6 +447,7 @@ sender (void *arg)
           cJSON *freq = cJSON_GetObjectItemCaseSensitive (m, "freq");
           cJSON *rec = cJSON_GetObjectItemCaseSensitive (m, "received");
           cJSON *text = cJSON_GetObjectItemCaseSensitive (m, "message");
+          cJSON *complete = cJSON_GetObjectItemCaseSensitive (m, "complete");
           char when[20];
           char *s;
 
@@ -337,7 +458,8 @@ sender (void *arg)
           if ((udp[0] == '\0' && port == 0) || !cJSON_IsString (bbbb) || !cJSON_IsNumber (freq) || !cJSON_IsString (rec) || !cJSON_IsString (text)) continue;
           /* "2026-11-22T07:12:00Z" -> "2026-11-22 07:12" */
           snprintf (when, sizeof (when), "%.10s %.5s", rec->valuestring, strlen (rec->valuestring) >= 16 ? rec->valuestring + 11 : "");
-          s = nrx_sentences (bbbb->valuestring, (int) freq->valuedouble, when, text->valuestring);
+          s = nrx_sentences (bbbb->valuestring, (int) freq->valuedouble, when, text->valuestring, iec, seq, !cJSON_IsFalse (complete));
+          seq = (seq + 1) % 100;
           if (s == NULL) continue;
           set_error (NULL, NULL);
           if (udp[0] != '\0') send_udp (udp, s);
@@ -347,6 +469,18 @@ sender (void *arg)
         }
       cJSON_Delete (list);
       free (ml);
+
+      /* Search and rescue alarm: the ALR sentence every 30 s until someone acknowledges it, and once more then */
+      alarms = pending_alarms ();
+      if ((udp[0] != '\0' || port != 0) && ((alarms > 0 && time (NULL) - last_alr >= 30) || (alarms == 0 && alarm_was)))
+        {
+          char alr[96];
+          alr_sentence (alr, sizeof (alr), utc_hhmmss (), alarms > 0, alarms == 0);
+          if (udp[0] != '\0') send_udp (udp, alr);
+          if (port != 0) send_tcp (alr, strlen (alr));
+          last_alr = time (NULL);
+        }
+      alarm_was = alarms > 0;
 
       pthread_mutex_lock (&lock);
       snprintf (cur_udp, sizeof (cur_udp), "%s", udp);

@@ -186,7 +186,7 @@ main (void)
   free (s);
 
   /* --- NRX: the form of the Furuno manual: $NXNRX,TA21,1,4,518,10,01,2005,102000,2.2,291600 UTC JAN = */
-  s = nrx_sentences ("TA21", 518, "2005-01-10 10:20", "ZCZC TA21\n291600 UTC JAN =\nOOSTENDERADIO - INFO 37/04 =\nWESTHINDER ANCHORAGE, ANCHOR LOST IN\nPOSITION 51-24.94N 002-40.02E.+\n");
+  s = nrx_sentences ("TA21", 518, "2005-01-10 10:20", "ZCZC TA21\n291600 UTC JAN =\nOOSTENDERADIO - INFO 37/04 =\nWESTHINDER ANCHORAGE, ANCHOR LOST IN\nPOSITION 51-24.94N 002-40.02E.+\n", 0, 0, 1);
   CHECK (s != NULL, "NRX made");
   if (s != NULL)
     {
@@ -202,7 +202,7 @@ main (void)
   strcpy (text, "ZCZC GA05\n");
   for (i = 0; i < 30; i++) strcat (text, i == 7 ? "W*RD " : "WORD ");
   strcat (text, "\n\nLAST,LINE$\n");
-  s = nrx_sentences ("GA05", 4209, "2026-11-22 09:07", text);
+  s = nrx_sentences ("GA05", 4209, "2026-11-22 09:07", text, 0, 0, 1);
   CHECK (s != NULL && strstr (s, ",4209,22,11,2026,090700,0.6,") != NULL, "4209, date, error rate");
   if (s != NULL)
     {
@@ -221,7 +221,56 @@ main (void)
       CHECK (strstr (joined, "WO|RD") == NULL && strstr (joined, "^|") == NULL && strstr (joined, "^2|") == NULL, "never inside a word or an escape");
       free (s);
     }
-  CHECK (nrx_sentences ("GA5", 518, "2026-11-22 09:07", "x") == NULL && nrx_sentences ("GA05", 518, "ayer", "x") == NULL, "bad input gives nothing");
+  CHECK (nrx_sentences ("GA5", 518, "2026-11-22 09:07", "x", 0, 0, 1) == NULL && nrx_sentences ("GA05", 518, "ayer", "x", 1, 0, 1) == NULL, "bad input gives nothing");
+
+  /* --- NRX in the form of IEC 61097-6, annex C. Its own example has this checksum: */
+  CHECK (checksum_ok ("$CRNRX,007,001,00,IE69,1,135600,27,06,2001,241,3,A,==========================*09"), "the example of the standard");
+  s = nrx_sentences ("IE69", 490, "2001-06-27 13:56", "ZCZC IE69\n==========================\nISSUED ON SATURDAY 06 JANUARY 2001.\nINSHORE WATERS FORECAST TO 12 MILES\nOFF SHORE FROM 1700 UTC TO 0500 UTC.\n\nNORTH FORELAND TO SELSEY BILL.\n12 HOURS FORECAST:\nSHOWERY WINDS, STRONGEST IN NORTH.\n\n", 1, 0, 1);
+  CHECK (s != NULL && strncmp (s, "$CRNRX,006,001,00,IE69,1,135600,27,06,2001,232,0,A,==========================*", 78) == 0, "IEC: first sentence, with every field; a line end counts as two characters");
+  if (s != NULL)
+    {
+      char joined[1200] = "";
+      for (n = 0, line = strtok_r (s, "\r\n", &save); line != NULL; line = strtok_r (NULL, "\r\n", &save), n++)
+        {
+          const char *t = line;
+          int commas = 0;
+          CHECK (checksum_ok (line) && strlen (line) <= 82, "IEC: checksum and length");
+          if (n > 0) CHECK (strncmp (line + 14, ",00,,,,,,,,,,", 13) == 0, "IEC: later sentences leave the other fields empty");
+          while (commas < 13 && *t != '\0') if (*t++ == ',') commas++;
+          strncat (joined, t, strcspn (t, "*"));
+        }
+      CHECK (n == 6, "IEC: six sentences");
+      CHECK (strcmp (joined, "==========================^0D^0AISSUED ON SATURDAY 06 JANUARY 2001.^0D^0AINSHORE WATERS FORECAST TO 12 MILES^0D^0AOFF SHORE FROM 1700 UTC TO 0500 UTC.^0D^0A^0D^0ANORTH FORELAND TO SELSEY BILL.^0D^0A12 HOURS FORECAST:^0D^0ASHOWERY WINDS^2C STRONGEST IN NORTH.^0D^0A^0D^0A") == 0, "IEC: the whole text, line ends as ^0D^0A");
+      free (s);
+    }
+  s = nrx_sentences ("GA05", 4209, "2026-11-22 09:07", "ZCZC GA05\nCUT SH*RT", 1, 123, 0);
+  CHECK (s != NULL && strncmp (s, "$CRNRX,001,001,23,GA05,3,090700,22,11,2026,9,1,V,CUT SH^2ART*", 60) == 0, "IEC: index 3, status V, bad characters, id 00-99");
+  free (s);
+
+  /* --- search and rescue alarm (B2 = D): until it is acknowledged by hand */
+  n = pending_alarms ();
+  add_message ("GD77", "ZCZC GD77\nTEST. MAYDAY RELAY. NOT A REAL ONE.\n", 518, 1);
+  CHECK (pending_alarms () == n + 1, "a D message raises the alarm");
+  m = listed ("GD77", &j);
+  CHECK (m != NULL && cJSON_IsTrue (cJSON_GetObjectItem (m, "alarm")), "and says so");
+  cJSON_Delete (j);
+  add_message ("GA78", "ZCZC GA78\nTEST. NOT A REAL ONE.\n", 518, 1);
+  CHECK (pending_alarms () == n + 1, "other subjects do not");
+  CHECK (acknowledge_alarms () == n + 1 && pending_alarms () == 0, "acknowledged");
+  m = listed ("GD77", &j);
+  CHECK (m != NULL && cJSON_GetObjectItem (m, "alarm") == NULL, "the message stays, without alarm");
+  cJSON_Delete (j);
+  add_message ("GD77", "ZCZC GD77\nTEST. MAYDAY RELAY. NOT A REAL ONE.\n", 518, 1);
+  CHECK (pending_alarms () == 0, "its repeat does not raise it again");
+  {
+    char alr[96];
+    alr_sentence (alr, sizeof (alr), 90705, 1, 0);
+    CHECK (strncmp (alr, "$CRALR,090705.00,003,A,V,NAVTEX: Search and rescue information*", 63) == 0 && strlen (alr) <= 84, "ALR sentence");
+    alr[strlen (alr) - 2] = '\0';
+    CHECK (checksum_ok (alr), "ALR checksum");
+    CHECK (is_alarm_ack ("$IIACK,003*56\r\n") && !is_alarm_ack ("$IIACK,003*00\r\n") && !is_alarm_ack ("$IIACK,004*51\r\n") && !is_alarm_ack ("ACK,003") && !is_alarm_ack (""), "ACK sentence");
+  }
+  CHECK (set_setting ("nrx.format", "iec") == 0 && set_setting ("nrx.format", "furuno") == 0 && set_setting ("nrx.format", "x") != 0, "NRX form");
 
   unlink (DATA_FILE);
   printf ("%d checks, %d failed\n", checks, failed);

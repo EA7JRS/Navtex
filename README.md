@@ -27,7 +27,8 @@ Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.c
 | Mensajes incompletos o con errores | Se guardan marcados, con su número de caracteres mal recibidos; una copia mejor sustituye a una peor, nunca al revés |
 | Reglas de un receptor NAVTEX | Recepción buena con menos de un 4 % de errores; cada mensaje se recuerda 72 horas para no repetirlo; los de número 00 se muestran siempre; se comprueba el turno de la letra |
 | Borrar y guardar | Borrar un mensaje o todos; guardar todos en un archivo de texto o CSV; tiempo de conservación ajustable |
-| Salida NMEA 0183 | Cada mensaje nuevo en sentencias `NRX`, por UDP y por un servidor TCP |
+| Alarma de búsqueda y salvamento | Un mensaje del tema D da una alarma, en pantalla y sonora, que solo se apaga a mano |
+| Salida NMEA 0183 | Cada mensaje nuevo en sentencias `NRX` (forma de Furuno o de la norma IEC 61097-6) y la alarma en `ALR`, por UDP y por un servidor TCP |
 
 ## Estado de las pruebas
 
@@ -217,6 +218,7 @@ Para que otro programa recoja los mensajes por la red. Todo en JSON y con las ho
 | `GET /api/messages?since=<id>&heard=<hora unix>` | Además, los mensajes que se han vuelto a oír después de `heard`: los que la estación sigue emitiendo |
 | `GET /api/export?format=txt` o `csv`, y `&freq=518`, `490` o `4209` | Todos los mensajes en un archivo |
 | `GET /api/nrx` | Estado de la salida NMEA 0183 |
+| `POST /api/alarm/ack` | Reconoce la alarma de búsqueda y salvamento |
 | `POST /api/messages/delete/<id>` o `/all` | Borra un mensaje o todos |
 
 ```json
@@ -228,7 +230,9 @@ Para que otro programa recoja los mensajes por la red. Todo en JSON y con las ho
 
 `freq` vale 518, 490 o 4209 (por 4209,5 kHz). `errors` son los caracteres que no se pudieron recibir (los asteriscos); `satisfactory`, que el mensaje llegó entero y con menos de un 4 % de errores; `heard`, la última vez que se oyó; `in_slot`, si llegó en el turno de su letra. El uso previsto es preguntar cada minuto con el último `id` recibido.
 
-Los cambios (`/api/settings/<clave>/<valor>`, `/saveconfig/<ajuste>/<valor>` y `/api/messages/delete/…`) solo se aceptan por `POST` y con la cabecera `X-Navtex`, de modo que otra página abierta en el mismo navegador no puede cambiar nada.
+Un mensaje del tema D sin reconocer lleva además `"alarm":true`, y `/api/status` dice cuántos hay en `sar_alarms`.
+
+Los cambios (`/api/settings/<clave>/<valor>`, `/saveconfig/<ajuste>/<valor>`, `/api/messages/delete/…` y `/api/alarm/ack`) solo se aceptan por `POST` y con la cabecera `X-Navtex`, de modo que otra página abierta en el mismo navegador no puede cambiar nada.
 
 ## Reglas de un receptor NAVTEX
 
@@ -246,7 +250,10 @@ El programa sigue lo que piden a un receptor la resolución MSC.148(77) de la OM
 | Memoria para al menos 200 mensajes (MSC.148(77), 6.1.1) | Sin límite de número; se borran al cumplir el tiempo de conservación sin volver a oírse |
 | Una interfaz para pasar los datos a otros equipos, según IEC 61162 (MSC.148(77), 9) | Sentencias `NRX` de NMEA 0183 |
 
-Lo que **no** hace: la alarma de los mensajes de búsqueda y salvamento (tema D) que solo se puede apagar a mano; la interfaz los destaca en rojo, y S.A.T.-APRS+ los convierte en aviso. Este programa no está homologado ni sustituye a un receptor que lo esté.
+| La información de búsqueda y salvamento (B2 = D) da una alarma que solo se puede apagar a mano (MSC.148(77), 7.1; IEC 61097-6, 4.3.9) | Aviso rojo arriba de la interfaz, con pitido, hasta que se pulsa «Reconocer la alarma». El mensaje se muestra aunque no se siga esa estación. La repetición del mismo mensaje no la vuelve a disparar |
+| La alarma se comunica con la sentencia `ALR`, cada 30 segundos hasta que se reconoce, y se puede reconocer con `ACK` (IEC 61097-6, 4.3.9.2, 4.3.9.3 y 8.4.2) | Por la salida NMEA 0183: alarma número 003 |
+
+El pitido depende del navegador: la mayoría no deja sonar una página hasta que se ha tocado alguna vez, y no llega a los 75–85 dBA que pide la norma para un equipo de puente. Este programa no está homologado ni sustituye a un receptor que lo esté.
 
 **Borrar.** Un mensaje borrado deja de verse, pero su identidad se sigue recordando hasta 72 horas: la repetición de la estación no lo trae de vuelta.
 
@@ -254,20 +261,35 @@ Lo que **no** hace: la alarma de los mensajes de búsqueda y salvamento (tema D)
 
 ## Salida NMEA 0183
 
-Cada mensaje nuevo sale en sentencias `NRX`, con la forma de los receptores NAVTEX de Furuno, que es la que usan la app y el plotter APRS LoRa+:
+Cada mensaje nuevo sale en sentencias `NRX`, en una de dos formas:
+
+**Furuno** (de serie; la que usan la app y el plotter APRS LoRa+):
 
 ```
 $CRNRX,GA05,1,12,518,22,11,2026,090700,0.0,TEXTO DE LA PRIMERA LINEA*hh
 ```
 
-Identidad, número de línea, total de líneas, frecuencia (518, 490 o 4209), día, mes, año, hora UTC de recepción, porcentaje de errores y texto. Una línea de texto por sentencia; las largas se parten, en un espacio si se puede, para no pasar de 82 caracteres; los caracteres reservados van como `^hh`.
+Identidad, número de línea, total de líneas, frecuencia (518, 490 o 4209), día, mes, año, hora UTC de recepción, porcentaje de errores y texto. Una línea de texto por sentencia; las largas se parten, en un espacio si se puede.
+
+**IEC 61097-6** (anexo C; la de la norma):
+
+```
+$CRNRX,003,001,00,GA05,2,090700,22,11,2026,85,0,A,PRINCIPIO DEL TEXTO*hh
+$CRNRX,003,002,00,,,,,,,,,,SIGUE EL TEXTO^0D^0AOTRA LINEA*hh
+```
+
+Total de sentencias, número de sentencia, número de mensaje (00–99), identidad, frecuencia (1 = 490 kHz, 2 = 518 kHz, 3 = 4209,5 kHz), hora UTC, día, mes, año, total de caracteres, caracteres mal recibidos, estado (`A` si el mensaje llegó hasta su NNNN, `V` si no) y texto. El texto va seguido de una sentencia a la siguiente, con los finales de línea como `^0D^0A`; en las sentencias siguientes los demás campos van vacíos.
+
+En las dos, ninguna sentencia pasa de 82 caracteres y los caracteres reservados van como `^hh`.
+
+**Alarma.** Mientras haya un mensaje de búsqueda y salvamento sin reconocer, sale cada 30 segundos `$CRALR,hhmmss.00,003,A,V,NAVTEX: Search and rescue information*hh`; al reconocerla, una vez más con `V,A`. Por el servidor TCP se puede reconocer con `$--ACK,003*hh`.
 
 Se ajusta en la pestaña Receptores:
 
 - **UDP**: destino `equipo:puerto` (vale la dirección de difusión de la red, por ejemplo `192.168.1.255:10110`). Una sentencia por datagrama.
 - **TCP**: puerto de un servidor al que se conectan los programas (hasta 8 a la vez).
 
-Solo salen los mensajes que llegan desde que se enciende la salida, no los ya guardados. La salida no tiene contraseña y nunca lee nada de quien se conecta.
+Solo salen los mensajes que llegan desde que se enciende la salida, no los ya guardados. La salida no tiene contraseña; de quien se conecta por TCP solo se atiende la sentencia `ACK` de la alarma.
 
 **NMEA 2000.** No existe un mensaje normalizado de NMEA 2000 para el texto de NAVTEX; la salida normalizada es la sentencia `NRX` de NMEA 0183. Este programa no inventa uno: al bus llegan a través de S.A.T.-APRS+, que los recoge por la API.
 
@@ -307,4 +329,4 @@ Si te resulta útil: [paypal.me/ea7jrs](https://paypal.me/ea7jrs)
 
 ## Previsto
 
-- La sentencia `NRX` en la forma de IEC 61162-1, además de la de Furuno.
+- La sentencia `NRM` de IEC 61097-6 (elegir estaciones y temas desde otro equipo).

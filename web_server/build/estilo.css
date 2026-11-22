@@ -215,3 +215,9 @@ input[type="text"] {
   .flecha { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .flecha { transition: none; } }
+
+/* Alarma de búsqueda y salvamento: arriba y a la vista hasta que se reconoce a mano */
+.alarma { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin: 0 0 12px; padding: 12px 14px; border-radius: 10px; border: 2px solid var(--rojo); background: var(--rojo-fondo); color: var(--texto); }
+.alarma p { margin: 0; flex: 1 1 260px; }
+.alarma strong { color: var(--rojo); }
+.alarma .boton { border-color: var(--rojo); font-weight: 700; }

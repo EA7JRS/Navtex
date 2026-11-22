@@ -109,6 +109,8 @@
     var f = claveFreq(m.freq);
     // Los mensajes con número 00 se muestran siempre, se siga o no esa estación o ese tema
     if (m.number === 0) return true;
+    // ...y los de búsqueda y salvamento, hasta que se reconoce su alarma (IEC 61097-6, 4.6.1.1)
+    if (m.alarm) return true;
     return config['stations' + f].indexOf(m.station) >= 0 &&
       (OBLIGATORIOS.indexOf(m.subject) >= 0 || config['messages' + f].indexOf(m.subject) >= 0);
   }
@@ -697,6 +699,37 @@
   }
 
   // ---------------------------------------------------------------- lectura
+  // --------------------------------- alarma de búsqueda y salvamento (D)
+  // Solo se apaga a mano. Suena si el navegador lo permite (hace falta haber tocado la página alguna vez).
+  var sonido = null, pitido = null;
+  function sonar(si) {
+    if (!si) { if (pitido) { clearInterval(pitido); pitido = null; } return; }
+    if (pitido) return;
+    var un = function () {
+      try {
+        var C = window.AudioContext || window.webkitAudioContext;
+        if (!C) return;
+        sonido = sonido || new C();
+        if (sonido.state === 'suspended') sonido.resume();
+        var o = sonido.createOscillator(), g = sonido.createGain();
+        o.frequency.value = 880; g.gain.value = 0.15;
+        o.connect(g); g.connect(sonido.destination);
+        o.start(); o.stop(sonido.currentTime + 0.35);
+      } catch (e) { /* sin sonido: queda el aviso en pantalla */ }
+    };
+    un();
+    pitido = setInterval(un, 1500);
+  }
+  function pintarAlarma() {
+    var caja = $('alarma');
+    var con = mensajes.filter(function (m) { return m.alarm; });
+    caja.hidden = con.length === 0;
+    sonar(con.length > 0);
+    if (!con.length) return;
+    $('alarma-texto').textContent = (con.length === 1 ? 'Mensaje de búsqueda y salvamento sin reconocer: ' : con.length + ' mensajes de búsqueda y salvamento sin reconocer: ')
+      + con.map(function (m) { return m.bbbb + ' (' + nombreFreq(m.freq) + ', ' + fechaUtc(m.recibido) + ')'; }).join(', ') + '.';
+  }
+
   // ------------------------------------------ conservación y salida NMEA
   function pintarSalida() {
     var raiz = $('salida');
@@ -710,6 +743,8 @@
       function (x) { ponerAjuste('nrx.udp', /^[A-Za-z0-9.-]{1,70}:\d{1,5}$/.test(x) ? x : '').then(pintarSalida); })));
     r.appendChild(campo('NMEA 0183 por TCP: puerto del servidor (0, apagado)', texto('nrx-tcp', v('nrx.tcp', '0'), '10110',
       function (x) { var n = Math.round(Number(x)); ponerAjuste('nrx.tcp', String(isFinite(n) && n >= 1024 && n <= 65535 ? n : 0)).then(pintarSalida); })));
+    r.appendChild(campo('Forma de la sentencia NRX', selector('nrx-format', [['furuno', 'Furuno (la de la app y el plotter APRS LoRa+)'], ['iec', 'IEC 61097-6 (la de la norma)']], v('nrx.format', 'furuno'),
+      function (x) { ponerAjuste('nrx.format', x); })));
     raiz.appendChild(r);
     var est = crear('p', 'nota'); est.id = 'estado-nrx'; raiz.appendChild(est);
     pedir('/api/nrx').then(function (j) {
@@ -766,6 +801,7 @@
       pintarEstado();
       pintarTemas();
       pintarLista();
+      pintarAlarma();
     }).catch(function (e) {
       error.hidden = false;
       error.textContent = 'No se puede consultar el receptor: ' + e.message + '.';
@@ -791,6 +827,11 @@
   $('filtro-tema').addEventListener('change', function (e) { filtro.tema = e.target.value; pintarLista(); });
   $('filtro-texto').addEventListener('input', function (e) { filtro.texto = e.target.value; pintarLista(); });
   $('filtro-todo').addEventListener('change', function (e) { filtro.todo = e.target.checked; pintarLista(); });
+  $('reconocer').addEventListener('click', function () {
+    enviar('/api/alarm/ack').then(leerTodo).catch(function (e) {
+      $('alarma-texto').textContent = 'No se pudo reconocer la alarma: ' + e.message + '.';
+    });
+  });
   $('borrar-todos').addEventListener('click', function () {
     if (window.confirm('¿Borrar todos los mensajes guardados? Los que las estaciones repitan en las próximas 72 horas no volverán a aparecer.')) borrar('all');
   });

@@ -77,6 +77,8 @@ void open_db(sqlite3 **db) {
                 sqlite3_exec(*db, "alter table messages add column errors integer default 0", NULL, NULL, NULL);
                 sqlite3_exec(*db, "alter table messages add column deleted integer default 0", NULL, NULL, NULL);
                 sqlite3_exec(*db, "alter table messages add column heard integer", NULL, NULL, NULL);
+                // alarm: 1 while a search and rescue message (B2 = D) waits to be acknowledged by hand
+                sqlite3_exec(*db, "alter table messages add column alarm integer default 0", NULL, NULL, NULL);
                 sqlite3_exec(*db, "create table if not exists status (tag text primary key, value text)", NULL, NULL, NULL);
                 sqlite3_exec(*db, "create table if not exists settings (tag text primary key, value text)", NULL, NULL, NULL);
                 // Receiver 1 keeps doing what a fresh install did; receiver 2 waits to be switched on
@@ -224,13 +226,16 @@ int add_message(char *bbbb, char *message, int freq, int complete) {
 	sqlite3_step(stmt); 
         sqlite3_finalize(stmt);
 
-	sqlite3_prepare_v2(db, "insert into messages (bbbb,message,timestamp,age,freq,complete,errors,deleted,heard) values ( ?1 , ?2 , ?3 ,'NEW',?4,?5,?6,0,strftime('%s','now'))", -1, &stmt, NULL);
+	sqlite3_prepare_v2(db, "insert into messages (bbbb,message,timestamp,age,freq,complete,errors,deleted,heard,alarm) values ( ?1 , ?2 , ?3 ,'NEW',?4,?5,?6,0,strftime('%s','now'),?7)", -1, &stmt, NULL);
         sqlite3_bind_text(stmt, 1, bbbb,          -1, SQLITE_STATIC);
         sqlite3_bind_text(stmt, 2, message,       -1, SQLITE_STATIC);
         sqlite3_bind_text(stmt, 3, timestamp_str, -1, SQLITE_STATIC);
         sqlite3_bind_int(stmt, 4, freq);
         sqlite3_bind_int(stmt, 5, complete ? 1 : 0);
         sqlite3_bind_int(stmt, 6, errors);
+        // Search and rescue information gives an alarm that can only be reset by hand
+        // (IMO MSC.148(77), 7.1; IEC 61097-6, 4.3.9)
+        sqlite3_bind_int(stmt, 7, bbbb[1] == 'D' ? 1 : 0);
         rc = sqlite3_step(stmt);
         sqlite3_finalize(stmt);
 	sqlite3_close(db);
@@ -409,12 +414,40 @@ int delete_messages(unsigned int id) {
 
         open_db(&db);
         if (db == NULL) return -1;
-        if (sqlite3_prepare_v2(db, id ? "update messages set deleted = 1, age = '' where id = ?1 and coalesce(deleted,0) = 0"
-                                      : "update messages set deleted = 1, age = '' where coalesce(deleted,0) = 0", -1, &stmt, NULL) == SQLITE_OK) {
+        if (sqlite3_prepare_v2(db, id ? "update messages set deleted = 1, alarm = 0, age = '' where id = ?1 and coalesce(deleted,0) = 0"
+                                      : "update messages set deleted = 1, alarm = 0, age = '' where coalesce(deleted,0) = 0", -1, &stmt, NULL) == SQLITE_OK) {
                 if (id) sqlite3_bind_int64(stmt, 1, (sqlite3_int64) id);
                 if (sqlite3_step(stmt) == SQLITE_DONE) n = sqlite3_changes(db);
                 sqlite3_finalize(stmt);
         }
+        sqlite3_close(db);
+        return n;
+}
+
+// Search and rescue messages (B2 = D) still waiting to be acknowledged
+int pending_alarms(void) {
+        sqlite3 *db;
+        sqlite3_stmt *stmt;
+        int n = 0;
+
+        open_db(&db);
+        if (db == NULL) return 0;
+        if (sqlite3_prepare_v2(db, "select count(*) from messages where coalesce(alarm,0) = 1 and coalesce(deleted,0) = 0", -1, &stmt, NULL) == SQLITE_OK) {
+                if (sqlite3_step(stmt) == SQLITE_ROW) n = sqlite3_column_int(stmt, 0);
+                sqlite3_finalize(stmt);
+        }
+        sqlite3_close(db);
+        return n;
+}
+
+// The operator has seen them: the alarm stops. Returns how many, or -1.
+int acknowledge_alarms(void) {
+        sqlite3 *db;
+        int n = -1;
+
+        open_db(&db);
+        if (db == NULL) return -1;
+        if (sqlite3_exec(db, "update messages set alarm = 0 where coalesce(alarm,0) = 1", NULL, NULL, NULL) == SQLITE_OK) n = sqlite3_changes(db);
         sqlite3_close(db);
         return n;
 }
@@ -662,7 +695,7 @@ char *get_messages_changed(unsigned int since_id, long heard_after, int limit) {
         open_db(&db);
         if (db == NULL) return NULL;
         json = cJSON_CreateArray();
-        if (sqlite3_prepare_v2(db, "select id,bbbb,freq,timestamp,complete,message,age,coalesce(errors,0),coalesce(heard, strftime('%s', timestamp))"
+        if (sqlite3_prepare_v2(db, "select id,bbbb,freq,timestamp,complete,message,age,coalesce(errors,0),coalesce(heard, strftime('%s', timestamp)),coalesce(alarm,0)"
                                    " from messages where coalesce(deleted,0) = 0 and (id > ?1 or (?3 > 0 and heard > ?3)) order by id asc limit ?2", -1, &stmt, NULL) == SQLITE_OK) {
                 sqlite3_bind_int64(stmt, 1, (sqlite3_int64) since_id);
                 sqlite3_bind_int(stmt, 2, limit);
@@ -698,6 +731,8 @@ char *get_messages_changed(unsigned int since_id, long heard_after, int limit) {
                                 cJSON_AddNumberToObject(m, "heard", (double) sqlite3_column_int64(stmt, 8));
                                 // received within the ten minutes of its B1 letter
                                 if (slot >= 0) cJSON_AddBoolToObject(m, "in_slot", slot);
+                                // search and rescue information not yet acknowledged
+                                if (sqlite3_column_int(stmt, 9)) cJSON_AddBoolToObject(m, "alarm", 1);
                         }
                         cJSON_AddStringToObject(m, "message", text);
                         // not yet opened in the web interface
@@ -763,10 +798,11 @@ char *get_status_json(void) {
                                 cJSON_AddStringToObject(json, (const char *) sqlite3_column_text(stmt, 0), (const char *) sqlite3_column_text(stmt, 1));
                 sqlite3_finalize(stmt);
         }
-        if (sqlite3_prepare_v2(db, "select count(*), coalesce(max(id),0) from messages", -1, &stmt, NULL) == SQLITE_OK) {
+        if (sqlite3_prepare_v2(db, "select count(*), coalesce(max(id),0), coalesce(sum(coalesce(alarm,0) = 1 and coalesce(deleted,0) = 0),0) from messages", -1, &stmt, NULL) == SQLITE_OK) {
                 if (sqlite3_step(stmt) == SQLITE_ROW) {
                         cJSON_AddNumberToObject(json, "messages", sqlite3_column_int(stmt, 0));
                         cJSON_AddNumberToObject(json, "last_id", sqlite3_column_int(stmt, 1));
+                        cJSON_AddNumberToObject(json, "sar_alarms", sqlite3_column_int(stmt, 2));
                 }
                 sqlite3_finalize(stmt);
         }
@@ -837,6 +873,8 @@ int valid_setting(const char *tag, const char *value) {
         if (strcmp(tag, "retention_hours") == 0) return all_of(value, "0123456789", 4) && value[0] != '\0' && atoi(value) >= 72 && atoi(value) <= 8760;
         // NMEA 0183 output (NRX sentences): UDP destination "host:port" and TCP server port; empty or 0 = off
         if (strcmp(tag, "nrx.udp") == 0) return valid_host_port(value);
+        // form of the NRX sentence: the one of Furuno's receivers, or the one of IEC 61097-6 (annex C)
+        if (strcmp(tag, "nrx.format") == 0) return one_of(value, "furuno", "iec", NULL, NULL);
         if (strcmp(tag, "nrx.tcp") == 0) return value[0] != '\0' && all_of(value, "0123456789", 5) && (atoi(value) == 0 || (atoi(value) >= 1024 && atoi(value) <= 65535));
         if ((strncmp(tag, "rx1.", 4) != 0 && strncmp(tag, "rx2.", 4) != 0)) return 0;
         key = tag + 4;

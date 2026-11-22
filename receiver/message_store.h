@@ -1,3 +1,4 @@
+#include <stddef.h>
 char *get_message_list();
 void get_current_timestamp(char *cts);
 char *get_message_text(unsigned int m_id);
@@ -39,3 +40,6 @@ long retention_seconds(void);
 int delete_messages(unsigned int id);
 char *export_messages(int csv, int freq);
 char *get_messages_changed(unsigned int since_id, long heard_after, int limit);
+/* Alarm of the search and rescue messages (B2 = D), reset only by hand */
+int pending_alarms(void);
+int acknowledge_alarms(void);

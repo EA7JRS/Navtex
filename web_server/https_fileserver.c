@@ -378,6 +378,20 @@ http_ahc (void *cls,
       snprintf (answer, sizeof (answer), "{\"deleted\":%d}", n);
       return send_text (connection, MHD_HTTP_OK, answer, "application/json", 0);
   }
+  if (strcmp (url, "/api/alarm/ack") == 0)
+  {
+      /* POST: the operator resets the search and rescue alarm */
+      char answer[40];
+      int n;
+
+      if (0 != strcmp (method, MHD_HTTP_METHOD_POST) || !is_own_request (connection))
+        return send_text (connection, MHD_HTTP_FORBIDDEN, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+      n = acknowledge_alarms ();
+      if (n < 0)
+        return send_text (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, ERROR_JSON, "application/json", 0);
+      snprintf (answer, sizeof (answer), "{\"acknowledged\":%d}", n);
+      return send_text (connection, MHD_HTTP_OK, answer, "application/json", 0);
+  }
   if (strcmp (url, "/api/status") == 0)
   {
       char *st = get_status_json ();
