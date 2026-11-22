@@ -1,0 +1,53 @@
+estacion,khz,b1,estado,alcance,meteo,mmsi
+Ain Taya Radio,518,B,activa,200,todas,006052110
+CENCOMARACORES (S. Miguel),518,F,activa,300,todas,
+CENCOMARACORES (S. Miguel),490,J,activa,300,todas,
+Varna Radio,518,J,activa,350,0530 1730,002070810
+Split (Hvar Is),518,Q,activa,85,todas,002380100
+Cyprus Radio,518,M,activa,200,todas,002091000
+Alexandria,518,N,activa,350,1010 2210,006221111
+Kosseir,518,V,activa,350,,
+Cabo La Nao,518,X,activa,220,0750 1950,002241004
+Cabo La Nao,490,M,activa,220,1000 2200,002241004
+Coruña,518,D,activa,300,0830 2030,002240992
+Coruña,490,W,activa,300,1140 2340,002240992
+Tarifa,518,G,activa,300,0900 2100,002240994
+Tarifa,490,T,activa,300,1110 2310,002240994
+Las Palmas,518,I,activa,450,0920 1320 2120,002240995
+Las Palmas,490,A,activa,450,0000 1200 1600,002240995
+Cross Corsen,518,A,inactiva,300,0000 1200,002275300
+Ouessant,490,E,inactiva,300,0840 2040,002275300
+CROSS La Garde,518,W,activa,250,,002275400
+CROSS La Garde,490,S,activa,250,1100 2300,002275400
+Irakleio,518,H,activa,280,,
+Irakleio,490,Q,activa,280,,
+Kerkyra,518,K,activa,280,,
+Kerkyra,490,P,activa,280,,
+Limnos,518,L,activa,280,,
+Limnos,490,R,activa,280,,
+RCC Haifa,518,P,activa,200,todas,004280001
+La Maddalena,518,R,,320,0650 1850,
+La Maddalena,490,I,,320,0520 1720,
+Sellia Marina,518,V,,320,0730 1930,
+Sellia Marina,490,W,,320,0740 1940,
+Mondolfo,518,U,,320,0720 1920,
+Mondolfo,490,E,,320,0440 1640,
+Piombino,490,N,activa,250,0610 1810,
+CENCOMARMADEIRA (Porto Santo),518,P,activa,300,todas,
+CENCOMARMADEIRA (Porto Santo),490,M,activa,300,todas,
+Malta Radio,518,O,activa,400,0620 1820,
+CENCOMAR (Penalva),518,R,activa,300,todas,
+CENCOMAR (Penalva),490,G,activa,300,todas,
+Constanta Radio,490,L,activa,400,todas,002640570
+Novorossiysk,518,A,activa,300,,
+Kelibia,518,T,inactiva,,todas,
+Izmir,518,I,activa,300,todas,002716000
+Izmir,490,C,activa,300,todas,002716000
+Samsun,518,E,activa,300,todas,002712000
+Samsun,490,A,activa,300,todas,002712000
+Istanbul,518,D,activa,300,todas,002711000
+Istanbul,490,B,activa,300,todas,002711000
+Berdyansk,518,G,activa,290,0900 1300 1700,002723659
+Berdyansk,490,U,activa,290,1120 1520 1920,002723659
+Odessa,518,C,activa,280,0820 1220 1620,002725613
+Odessa,490,X,activa,280,1150 1550 1950,002725613

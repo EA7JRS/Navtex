@@ -9,6 +9,13 @@
 window.NAVTEX_I18N = (function () {
   'use strict';
   var EN = {
+ " (con boletín meteorológico)": " (with weather bulletin)",
+ " · boletín meteorológico en todos los turnos": " · weather bulletin in every slot",
+ " · boletín meteorológico a las ": " · weather bulletin at ",
+ " · boletín meteorológico": " · weather bulletin",
+ " · comprobada: IHM 2023": " · checked: IHM 2023",
+ "Radioseñales, edición de 2023 (comprobación de las estaciones de las NAVAREA II y III: estado, alcance y boletines meteorológicos)": "Radioseñales, 2023 edition (check of the stations of NAVAREA II and III: status, range and weather bulletins)",
+ "IHM": "IHM (Spanish Navy Hydrographic Institute)",
  "518, 490 y 4209,5 kHz": "518, 490 and 4209.5 kHz",
  "Secciones": "Sections",
  "Mensajes": "Messages",
@@ -58,7 +65,7 @@ window.NAVTEX_I18N = (function () {
  "para reconocerla desde otro equipo. No tiene contraseña: solo en una red de confianza.": "sentence to acknowledge it from other equipment. It has no password: only on a trusted network.",
  "Un equipo solo lo puede usar un programa a la vez. Si el receptor dice «sin equipo», puede estar desconectado o en uso por otro programa (por ejemplo, SDRconnect o SDR++): el receptor lo sigue intentando cada 15 segundos.": "A device can only be used by one program at a time. If the receiver says “no device”, it may be unplugged or in use by another program (for example, SDRconnect or SDR++): the receiver keeps trying every 15 seconds.",
  "Receptor NAVTEX por software para SDRplay y RTL-SDR: escucha 518 y 490 kHz a la vez, o 4209,5 kHz en onda corta, en segundo plano, y guarda los mensajes para leerlos cuando haga falta.": "Software NAVTEX receiver for SDRplay and RTL-SDR: it listens to 518 and 490 kHz at the same time, or 4209.5 kHz on short wave, in the background, and stores the messages to read them when needed.",
- "Estaciones: Tabla 4 de la UIT, «Coast stations participating in the NAVTEX services» (2017), y Wikipedia, «List of Navtex stations» (CC BY-SA 4.0), para 4209,5 kHz.": "Stations: ITU Table 4, “Coast stations participating in the NAVTEX services” (2017), and Wikipedia, “List of Navtex stations” (CC BY-SA 4.0), for 4209.5 kHz.",
+ "Estaciones: Tabla 4 de la UIT, «Coast stations participating in the NAVTEX services» (2017), y Wikipedia, «List of Navtex stations» (CC BY-SA 4.0), para 4209,5 kHz. Las de las NAVAREA II y III, comprobadas con «Radioseñales» 2023 del Instituto Hidrográfico de la Marina.": "Stations: ITU Table 4, “Coast stations participating in the NAVTEX services” (2017), and Wikipedia, “List of Navtex stations” (CC BY-SA 4.0), for 4209.5 kHz. Those of NAVAREA II and III, checked against “Radioseñales” 2023 of the Spanish Navy Hydrographic Institute.",
  "Basado en": "Based on",
  ", de bartelvdh (MIT). Este programa es software libre, bajo licencia GPL-3.0 o posterior, y se ofrece sin ninguna garantía.": ", by bartelvdh (MIT). This program is free software, under the GPL-3.0 licence or later, and comes with no warranty.",
  "Sigue las reglas de funcionamiento de un receptor NAVTEX: UIT-R M.540-2, resolución MSC.508(105) de la OMI, Manual NAVTEX e IEC 61097-6 (sentencias NRX, ALR y ACK). No es un equipo homologado. El detalle está en": "It follows the operating rules of a NAVTEX receiver: ITU-R M.540-2, IMO resolution MSC.508(105), the NAVTEX Manual and IEC 61097-6 (NRX, ALR and ACK sentences). It is not type-approved equipment. The details (in Spanish) are in",

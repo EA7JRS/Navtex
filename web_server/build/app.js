@@ -194,6 +194,16 @@
     });
     return mejor;
   }
+  // Boletín meteorológico: en qué turnos lo emite la estación (dato del IHM; vacío si no se sabe)
+  function llevaMeteo(e, ms) {
+    var d = new Date(ms);
+    return !!e.meteo && e.meteo.indexOf(dos(d.getUTCHours()) + dos(d.getUTCMinutes())) >= 0;
+  }
+  function textoMeteo(e) {
+    if (!e.meteo || !e.meteo.length) return '';
+    if (e.meteo.length === e.horas.length) return tr(' · boletín meteorológico en todos los turnos');
+    return tr(' · boletín meteorológico a las ') + e.meteo.map(function (h) { return h.slice(0, 2) + ':' + h.slice(2); }).join(', ') + ' UTC';
+  }
   function horaUtc(ms) { var d = new Date(ms); return dos(d.getUTCHours()) + ':' + dos(d.getUTCMinutes()); }
 
   // ---------------------------------------------------------------- estado
@@ -451,8 +461,11 @@
           li.appendChild(crear('span', 'mas', e.pais
             + (e.alcance !== null ? tr(' · alcance ') + e.alcance + tr(' mn') : '')
             + (e.idioma ? ' · ' + (IDIOMAS[e.idioma] ? tr(IDIOMAS[e.idioma]) : e.idioma) : '')
-            + (px !== null ? tr(' · próxima ') + horaUtc(px) + ' UTC' : '')
-            + (e.nota ? ' · ' + e.nota : '')));
+            + (px !== null ? tr(' · próxima ') + horaUtc(px) + ' UTC' + (llevaMeteo(e, px) ? tr(' (con boletín meteorológico)') : '') : '')
+            + textoMeteo(e)
+            + (e.mmsi ? ' · MMSI ' + e.mmsi : '')
+            + (e.nota ? ' · ' + e.nota : '')
+            + (e.comprobada ? tr(' · comprobada: IHM 2023') : '')));
           ul.appendChild(li);
         });
         t.appendChild(ul);
@@ -553,7 +566,7 @@
     lista.forEach(function (x) {
       var li = crear('li');
       li.appendChild(crear('span', 'hora', horaUtc(x.t)));
-      li.appendChild(document.createTextNode(x.e.nombre + ' (' + x.e.letra + ') · ' + nombreFreq(x.e.khz) + tr(' · en {n} min').replace('{n}', Math.max(1, Math.round((x.t - ahora) / 60000)))));
+      li.appendChild(document.createTextNode(x.e.nombre + ' (' + x.e.letra + ') · ' + nombreFreq(x.e.khz) + tr(' · en {n} min').replace('{n}', Math.max(1, Math.round((x.t - ahora) / 60000))) + (llevaMeteo(x.e, x.t) ? tr(' · boletín meteorológico') : '')));
       ol.appendChild(li);
     });
   }

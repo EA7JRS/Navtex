@@ -11,6 +11,13 @@ Fuentes:
                       (CC BY-SA 4.0), consultada el 22-11-2026. La tabla de la UIT
                       no trae el canal de onda corta.
 
+  ihm_2023.csv        Comprobación de las estaciones de las NAVAREA II y III con «Radioseñales»,
+                      edición de 2023, del Instituto Hidrográfico de la Marina (España): estado
+                      (activa / inactiva / prevista), alcance en millas, a qué horas se emite el
+                      boletín meteorológico («todas» = en todos los turnos) y MMSI del centro. Solo
+                      esos datos sueltos, cotejados uno a uno; la publicación es © IHM y no se copia.
+                      Donde difiere de la UIT (2017) manda esta, más reciente, y la nota lo dice.
+
 No se incluyen las emisiones japonesas en 424 kHz (el programa no las recibe)
 ni las estaciones sin letra asignada.
 
@@ -87,12 +94,44 @@ def main():
             continue
         vistas.add(clave)
         estaciones.append(e)
+    # Comprobación con Radioseñales 2023 (IHM): datos sueltos de las NAVAREA II y III
+    indice = {(e['nombre'], e['khz'], e['letra']): e for e in estaciones}
+    comprobadas = 0
+    with open(os.path.join(AQUI, 'ihm_2023.csv'), encoding='utf-8', newline='') as f:
+        for n, r in enumerate(csv.DictReader(f), start=2):
+            e = indice.get((r['estacion'], int(r['khz']), r['b1']))
+            if e is None:
+                sys.exit(f'ihm_2023.csv:{n}: no está en la lista: {r["estacion"]} {r["khz"]} {r["b1"]}')
+            notas = [e['nota']] if e['nota'] else []
+            if r['estado'] and r['estado'] != e['estado']:
+                if r['estado'] not in ESTADOS.values():
+                    sys.exit(f'ihm_2023.csv:{n}: estado desconocido «{r["estado"]}»')
+                notas.append(f'{r["estado"]} según el IHM (2023); la UIT (2017) la daba {e["estado"]}')
+                e['estado'] = r['estado']
+            if r['alcance'] and int(r['alcance']) != e['alcance']:
+                notas.append(f'alcance según el IHM (2023); la UIT (2017) daba {e["alcance"]} mn')
+                e['alcance'] = int(r['alcance'])
+            meteo = e['horas'] if r['meteo'] == 'todas' else r['meteo'].split()
+            for h in meteo:
+                if h not in e['horas']:
+                    sys.exit(f'ihm_2023.csv:{n}: {h} no es un turno de {r["estacion"]} {r["b1"]}')
+            e['meteo'] = meteo
+            e['mmsi'] = r['mmsi']
+            e['nota'] = '; '.join(notas)
+            e['comprobada'] = 'IHM 2023'
+            comprobadas += 1
+    for e in estaciones:
+        e.setdefault('meteo', [])
+        e.setdefault('mmsi', '')
+        e.setdefault('comprobada', '')
     datos = {
         'fuentes': [
             {'nombre': 'UIT', 'titulo': 'Coast stations participating in the NAVTEX services (Tabla 4)',
              'fecha': '2017-05-31', 'url': 'https://www.itu.int/en/ITU-R/terrestrial/mars/Documents/Navtex.pdf'},
             {'nombre': 'Wikipedia', 'titulo': 'List of Navtex stations, tabla de 4209,5 kHz (CC BY-SA 4.0)',
              'fecha': '2026-11-22', 'url': 'https://en.wikipedia.org/wiki/List_of_Navtex_stations'},
+            {'nombre': 'IHM', 'titulo': 'Radioseñales, edición de 2023 (comprobación de las estaciones de las NAVAREA II y III: estado, alcance y boletines meteorológicos)',
+             'fecha': '2023-11', 'url': 'https://publicaciones.defensa.gob.es'},
         ],
         'estaciones': estaciones,
     }
@@ -103,6 +142,7 @@ def main():
     for e in estaciones:
         por[e['khz']] = por.get(e['khz'], 0) + 1
     print(f'{len(estaciones)} estaciones: ' + ', '.join(f'{n} en {k}' for k, n in sorted(por.items())))
+    print(f'{comprobadas} comprobadas con Radioseñales 2023 del IHM')
     print(f'{sum(1 for e in estaciones if e["lat"] is None)} sin coordenadas; {len(a1) + len(a2)} con horas fuera de la regla de turnos:')
     for a in a1 + a2:
         print('  ' + a)

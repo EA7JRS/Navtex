@@ -1,4 +1,4 @@
-AC_INIT([navtex], [1.7.0])
+AC_INIT([navtex], [1.7.1])
 AM_INIT_AUTOMAKE([foreign])
 AC_PROG_CXX
 AC_PROG_CC
