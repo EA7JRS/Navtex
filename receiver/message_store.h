@@ -8,6 +8,8 @@ int update_config(char* tag,char* value);
 int add_message(char *bbbb,char *message, int freq, int complete);
 /* 1: print every received character (for a terminal); 0: only events (for a service) */
 extern int navtex_verbose;
+/* 1: the receiver is on the HF channel (4209.5 kHz) instead of 518 and 490 kHz */
+extern int navtex_hf;
 char *slots_plan() ;
 long calculate_time_difference(char *timestamp);
 void free_json_str(char *json_str);

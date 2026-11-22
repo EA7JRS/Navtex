@@ -88,7 +88,7 @@ int rtlsdr_source_run(void)
     pthread_t reader;
     char manufact[256] = "", product[256] = "", serial[256] = "";
     uint32_t count = rtlsdr_get_device_count();
-    uint32_t freq = (uint32_t) (IQ_CENTRE_HZ + iq_opt.rtl_upconverter_hz);
+    uint32_t freq = (uint32_t) (iq_centre_hz() + iq_opt.rtl_upconverter_hz);
     int failed = 1;
     int r;
 

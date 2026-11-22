@@ -4,6 +4,22 @@
 extern "C" int add_message(char *bbbb,char *message, int freq, int complete);
 extern "C" int navtex_verbose;
 extern "C" void set_status_now(const char *tag);
+extern "C" int navtex_hf;
+
+// The two demodulators sit 14 kHz above and below the tuned centre. On MF
+// that is 518 and 490 kHz. On HF the centre is placed so that the upper one
+// lands on 4209.5 kHz (stored as 4209); the lower one hears nothing useful
+// and is ignored.
+static unsigned int band_freq(unsigned int f)
+{
+	if (!navtex_hf) return f;
+	return f == 518 ? 4209 : 0;
+}
+static const char *band_name(unsigned int f)
+{
+	return f == 4209 ? "4209.5" : f == 518 ? "518" : "490";
+}
+
 
 // Append to a fixed buffer without ever writing past its end: what arrives
 // over the air decides the length, so it cannot be trusted.
@@ -70,12 +86,13 @@ void byte_state_machine::init()
 
 void byte_state_machine::message_abort()
 {
-	printf("%u kHz: reception lost%s\n", freq, message_reception_ongoing ? ", message kept as incomplete" : "");
+	if (band_freq(freq) == 0) { init(); return; }
+	printf("%s kHz: reception lost%s\n", band_name(band_freq(freq)), message_reception_ongoing ? ", message kept as incomplete" : "");
    	if(message_reception_ongoing)
 	{
 		// keep what was received, marked as incomplete
 		safe_append(message_buffer, sizeof(message_buffer), line_buffer, strlen(line_buffer));
-		add_message(message_bbbb,message_buffer,freq,0);
+		if (band_freq(freq) != 0) add_message(message_bbbb,message_buffer,band_freq(freq),0);
 	}
 	init();
 }
@@ -102,7 +119,7 @@ void byte_state_machine::message_line_out()
 				size_t len = strlen(message_buffer);
 				size_t cut = strlen(line_buffer) + 1;
 				if (len >= cut) message_buffer[len - cut] = '\0';
-				add_message(message_bbbb,message_buffer,freq,0);
+				if (band_freq(freq) != 0) add_message(message_bbbb,message_buffer,band_freq(freq),0);
 			}
 			message_buffer[0]= '\0';
 			message_bbbb[0]= '\0';
@@ -111,7 +128,7 @@ void byte_state_machine::message_line_out()
 			safe_append(message_bbbb, sizeof(message_bbbb), line_buffer+pmatch[2].rm_so, pmatch[2].rm_eo - pmatch[2].rm_so);
 			safe_append(message_bbbb, sizeof(message_bbbb), line_buffer+pmatch[3].rm_so, pmatch[3].rm_eo - pmatch[3].rm_so);
 			message_bbbb[4]='\0';
-			printf("%u kHz: start of message %s\n", freq, message_bbbb);
+			if (band_freq(freq) != 0) printf("%s kHz: start of message %s\n", band_name(band_freq(freq)), message_bbbb);
    			message_reception_ongoing=true;
 		}
 		else
@@ -120,7 +137,7 @@ void byte_state_machine::message_line_out()
 			{
 				if(message_reception_ongoing) 
 				{
-					add_message(message_bbbb,message_buffer,freq,1);
+					if (band_freq(freq) != 0) add_message(message_bbbb,message_buffer,band_freq(freq),1);
 				}
 				message_buffer[0]= '\0';
 				message_bbbb[0]= '\0';
@@ -658,8 +675,11 @@ void byte_state_machine::receive_bit(char bit_received)
 			byte_reception_enabled = true;
 			bits_received = 0;
                         temp_byte = 0x00;
-                        printf("%u kHz: phasing detected\n", freq);
-                        set_status_now(freq == 518 ? "phasing_518" : "phasing_490");
+                        if (band_freq(freq) != 0)
+                        {
+                            printf("%s kHz: phasing detected\n", band_name(band_freq(freq)));
+                            set_status_now(band_freq(freq) == 4209 ? "phasing_4209" : band_freq(freq) == 518 ? "phasing_518" : "phasing_490");
+                        }
 			phase_det_disable_timer = PHASE_DETECTION_DIS_TIMER_VALUE; 
 		}
 		status = STAT_INIT;

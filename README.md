@@ -176,6 +176,25 @@ La interfaz original venía compilada y sin su código fuente, así que no se po
 - Se ve bien en el móvil, sigue el modo claro u oscuro del equipo y **no carga nada de Internet**: funciona a bordo sin conexión.
 - Lo recibido por radio se muestra siempre como texto, nunca se interpreta, y el servidor prohíbe a la página cargar nada que no sea suyo.
 
+### Fase 6 · NAVTEX de onda corta (4209,5 kHz)
+
+Además de 518 y 490 kHz, el receptor puede escuchar el canal de onda corta, **4209,5 kHz**, con la opción `-B hf`:
+
+```
+navtexreceiver -B hf                 # SDRplay
+navtexreceiver -s rtlsdr -B hf       # RTL-SDR (muestreo directo o conversor)
+```
+
+- **Un receptor escucha una banda o la otra.** 518 y 490 kHz van juntas porque están a 28 kHz; 4209,5 kHz queda a 3,7 MHz y no cabe en la misma sintonía. Para tener las tres a la vez hacen falta dos receptores, cada uno con su copia del programa.
+- En `/etc/default/navtex` se elige con `RECEIVER_OPTS`, por ejemplo `RECEIVER_OPTS="-p C -B hf"`.
+- Los mensajes se guardan con frecuencia `4209` y tienen sus propias estaciones y temas (`stations4209`, `messages4209`; de serie, todas las estaciones). La interfaz web los muestra como «4209,5 kHz», con su filtro y su ajuste.
+- `/api/status` dice la banda en uso (`band`: `mf` o `hf`) y el último sincronismo en ella (`phasing_4209`).
+
+Sirve con antenas que cubren las tres frecuencias, como la JRC NAW-333 (518, 490 y 4209,5 kHz).
+
+Probado con una recepción real colocada en el canal de onda corta: se descodifica y se guarda como 4209,5 kHz, y lo que cae en el otro canal se ignora. **Sin probar con una emisión real en 4209,5 kHz.**
+
 ### Previsto
 
 - Sentencias `NRX` de NMEA 0183 para equipos que las admitan.
+- Cambio de banda programado por horario, para alternar onda media y onda corta con un solo receptor.

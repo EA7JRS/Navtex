@@ -83,7 +83,7 @@ select:focus-visible, input:focus-visible, .mensaje > button:focus-visible { out
 
 main { max-width: 1100px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 
-.estado { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.estado { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 .dato { background: var(--panel); border: 1px solid var(--borde); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .etiqueta { font-size: 12px; color: var(--suave); text-transform: uppercase; letter-spacing: 0.4px; }
 .valor { font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }

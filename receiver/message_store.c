@@ -13,6 +13,7 @@ extern char* strdup(const char*);
 #define TS_SIZE 20
 
 int navtex_verbose = 1;
+int navtex_hf = 0;
 static int schema_checked = 0;
 
 // An incomplete reception does not replace a complete copy of the same message
@@ -76,13 +77,16 @@ void open_db(sqlite3 **db) {
         if (!schema_checked) {
                 sqlite3_exec(*db, "alter table messages add column complete integer default 1", NULL, NULL, NULL);
                 sqlite3_exec(*db, "create table if not exists status (tag text primary key, value text)", NULL, NULL, NULL);
+                // settings for the HF channel (4209.5 kHz), for databases older than it
+                sqlite3_exec(*db, "insert into config (tag,value) select 'stations4209','ABCDEFGHIJKLMNOPQRSTUVWXYZ' where not exists (select 1 from config where tag='stations4209')", NULL, NULL, NULL);
+                sqlite3_exec(*db, "insert into config (tag,value) select 'messages4209','ABCDEFL' where not exists (select 1 from config where tag='messages4209')", NULL, NULL, NULL);
                 schema_checked = 1;
         }
 }
 
 // Only these settings exist, and their values are lists of NAVTEX B1/B2 letters.
 static int valid_config(const char *tag, const char *value) {
-        static const char *tags[] = { "stations518", "messages518", "stations490", "messages490" };
+        static const char *tags[] = { "stations518", "messages518", "stations490", "messages490", "stations4209", "messages4209" };
         size_t i, n;
         int known = 0;
 
@@ -132,7 +136,7 @@ int add_message(char *bbbb, char *message, int freq, int complete) {
         }
         if (keep_existing) {
                 sqlite3_close(db);
-                printf("%d kHz: %s received incomplete (%d characters), keeping the stored copy\n", freq, bbbb, (int) strlen(message));
+                printf("%s kHz: %s received incomplete (%d characters), keeping the stored copy\n", freq == 4209 ? "4209.5" : freq == 518 ? "518" : "490", bbbb, (int) strlen(message));
                 return 0;
         }
 
@@ -152,10 +156,10 @@ int add_message(char *bbbb, char *message, int freq, int complete) {
         sqlite3_finalize(stmt);
 	sqlite3_close(db);
         if (rc != SQLITE_DONE) {
-                printf("%d kHz: %s could not be stored\n", freq, bbbb);
+                printf("%s kHz: %s could not be stored\n", freq == 4209 ? "4209.5" : freq == 518 ? "518" : "490", bbbb);
                 return -2;
         }
-        printf("%d kHz: %s stored, %s, %d characters\n", freq, bbbb, complete ? "complete" : "incomplete", (int) strlen(message));
+        printf("%s kHz: %s stored, %s, %d characters\n", freq == 4209 ? "4209.5" : freq == 518 ? "518" : "490", bbbb, complete ? "complete" : "incomplete", (int) strlen(message));
         return 0;
 }
 

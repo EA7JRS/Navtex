@@ -50,6 +50,12 @@ short debug_mode;
 
 struct iq_options iq_opt = { 0, 'A', 0, NULL, -1, 0, -1, 0, NULL, 0 };
 
+long iq_centre_hz(void)
+{
+    return navtex_hf ? IQ_CENTRE_HF_HZ : IQ_CENTRE_MF_HZ;
+}
+
+
 // Set by SIGINT/SIGTERM: stop streaming and release the receiver cleanly.
 volatile sig_atomic_t stop_requested = 0;
 // Set when the receiver is unplugged or stops delivering samples.
@@ -517,7 +523,7 @@ int sdrplay_source_run(void)
 
 
                 chParams->tunerParams.loMode = sdrplay_api_LO_Auto;
-                chParams->tunerParams.rfFreq.rfHz = (float)FREQ_TUNER; //(1/4 times sampling freq after decimation)
+                chParams->tunerParams.rfFreq.rfHz = (double) iq_centre_hz(); //(1/4 times sampling freq after decimation)
                 chParams->tunerParams.bwType = sdrplay_api_BW_0_200;
                 chParams->tunerParams.ifType = sdrplay_api_IF_Zero;
                 //chParams->tunerParams.ifType = sdrplay_api_IF_0_450;
@@ -636,6 +642,8 @@ static void usage(const char *prog)
     printf(
 "Usage: %s [options]\n"
 "  -s source   sdrplay | rtlsdr | file   (default: sdrplay when built in, else rtlsdr)\n"
+"  -B band     mf: 518 and 490 kHz at the same time (default)\n"
+"              hf: 4209.5 kHz only\n"
 "  -b          bias T on: power an active antenna through the coax\n"
 "  -d          debug: also write the received I/Q to a wav file\n"
 "  -v          print every received character (default on a terminal)\n"
@@ -672,7 +680,7 @@ int main(int argc, char *argv[])
   // character by character only when somebody is watching
   navtex_verbose = isatty(STDOUT_FILENO) ? 1 : 0;
 
-  while ((c = getopt (argc, argv, "bdhtvqs:p:i:S:D:u:g:P:f:")) != -1) {
+  while ((c = getopt (argc, argv, "bdhtvqs:B:p:i:S:D:u:g:P:f:")) != -1) {
     switch (c)
       {
       case 'b':
@@ -697,6 +705,11 @@ int main(int argc, char *argv[])
         break;
       case 's':
         source = optarg;
+        break;
+      case 'B':
+        if (strcmp(optarg, "hf") == 0) navtex_hf = 1;
+        else if (strcmp(optarg, "mf") == 0) navtex_hf = 0;
+        else { printf("invalid band (mf or hf)\n"); return 1; }
         break;
       case 'p':
 	if(strcmp(optarg,"A")==0) 
@@ -735,7 +748,7 @@ int main(int argc, char *argv[])
         iq_opt.file_path = optarg;
         break;
       case '?':
-        if (optopt != 0 && strchr("spiSDugPf", optopt) != NULL)
+        if (optopt != 0 && strchr("sBpiSDugPf", optopt) != NULL)
           fprintf (stderr, "Option -%c requires an argument.\n", optopt);
         else if (isprint (optopt))
           fprintf (stderr, "Unknown option `-%c'.\n", optopt);
@@ -768,6 +781,8 @@ int main(int argc, char *argv[])
 
    if(debug_mode) { PrepWav(); }
    set_status("source", source);
+   set_status("band", navtex_hf ? "hf" : "mf");
+   printf("Band: %s\n", navtex_hf ? "HF, 4209.5 kHz" : "MF, 518 and 490 kHz");
    set_status_now("receiver_started");
 
    // A source only returns when it is asked to stop, when the receiver cannot

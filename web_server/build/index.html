@@ -19,7 +19,7 @@
       <span class="logo" aria-hidden="true">NTX</span>
       <div>
         <h1>Navtex</h1>
-        <p class="sub">518 y 490 kHz</p>
+        <p class="sub">518, 490 y 4209,5 kHz</p>
       </div>
     </div>
     <nav class="pestanas" aria-label="Secciones">
@@ -47,6 +47,11 @@
         <span class="detalle">último sincronismo</span>
       </div>
       <div class="dato">
+        <span class="etiqueta">4209,5 kHz · onda corta</span>
+        <span class="valor" id="sinc-4209">—</span>
+        <span class="detalle">último sincronismo</span>
+      </div>
+      <div class="dato">
         <span class="etiqueta">Hora UTC</span>
         <span class="valor mono" id="hora-utc">—</span>
         <span class="detalle" id="total-mensajes"></span>
@@ -61,6 +66,7 @@
           <button type="button" class="chip activa" data-freq="0" id="freq-todas">Todas</button>
           <button type="button" class="chip" data-freq="518" id="freq-518">518 kHz</button>
           <button type="button" class="chip" data-freq="490" id="freq-490">490 kHz</button>
+          <button type="button" class="chip" data-freq="4209" id="freq-4209">4209,5 kHz</button>
         </div>
         <label class="campo">
           <span class="oculto">Tema</span>
@@ -87,7 +93,7 @@
     <section id="vista-acerca" aria-label="Acerca de" hidden>
       <div class="tarjeta acerca">
         <h2>Navtex</h2>
-        <p>Receptor NAVTEX por software para SDRplay y RTL-SDR: escucha 518 y 490 kHz a la vez, en segundo plano, y guarda los mensajes para leerlos cuando haga falta.</p>
+        <p>Receptor NAVTEX por software para SDRplay y RTL-SDR: escucha 518 y 490 kHz a la vez, o 4209,5 kHz en onda corta, en segundo plano, y guarda los mensajes para leerlos cuando haga falta.</p>
         <p>Navtex · © 2026 Manuel - EA7JRS</p>
         <p>Basado en <a href="https://github.com/bartelvdh/Navtex" rel="noopener">Navtex</a>, de bartelvdh. Licencia MIT.</p>
         <p><a href="https://github.com/EA7JRS/Navtex" rel="noopener">github.com/EA7JRS/Navtex</a> · parte del ecosistema APRS LoRa+</p>

@@ -2,7 +2,8 @@
  * Navtex receiver: decode a recording instead of a live receiver.
  *
  * Useful to test the decoder and to replay a doubtful reception. The file
- * must hold complex samples at 252 kS/s centred on 504 kHz:
+ * must hold complex samples at 252 kS/s centred on 504 kHz (or, with -B hf,
+ * on 4195.5 kHz):
  *   - .wav, 16 bit, two channels (I and Q): what the receiver writes with -d;
  *   - anything else: raw unsigned 8 bit I/Q, what "rtl_sdr -s 252000" writes.
  *
@@ -79,7 +80,7 @@ int file_source_run(void)
         }
     }
     printf("file: decoding %s (%s), %d S/s centred on %d Hz\n", iq_opt.file_path,
-           is_wav ? "wav, 16 bit I/Q" : "raw unsigned 8 bit I/Q", IQ_SAMPLE_RATE, IQ_CENTRE_HZ);
+           is_wav ? "wav, 16 bit I/Q" : "raw unsigned 8 bit I/Q", IQ_SAMPLE_RATE, (int) iq_centre_hz());
 
     pairs = malloc(CHUNK_PAIRS * 2 * sizeof(short));
     raw = malloc(CHUNK_PAIRS * 2);

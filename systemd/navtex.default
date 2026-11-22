@@ -6,6 +6,9 @@
 #   SDRplay, toma B con alimentación al coaxial:  RECEIVER_OPTS="-p B -b"
 #   RTL-SDR (Nooelec NESDR SMArt v5, Blog V3/V4): RECEIVER_OPTS="-s rtlsdr"
 #   RTL-SDR con conversor externo de 125 MHz:     RECEIVER_OPTS="-s rtlsdr -u 125000000"
+# Banda: de serie, 518 y 490 kHz a la vez. Para el NAVTEX de onda corta
+# (4209,5 kHz) añada -B hf; un receptor escucha una banda o la otra.
+#   SDRplay en onda corta, toma C:                RECEIVER_OPTS="-p C -B hf"
 RECEIVER_OPTS=""
 
 # Interfaz web: puerto y dirección en la que escucha.

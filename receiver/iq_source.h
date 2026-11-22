@@ -17,7 +17,10 @@ extern "C" {
 #endif
 
 #define IQ_SAMPLE_RATE 252000      /* samples per second delivered by a source */
-#define IQ_CENTRE_HZ   504000      /* (518000 + 490000) / 2 */
+#define IQ_CENTRE_MF_HZ 504000     /* (518000 + 490000) / 2: both MF channels at +-14 kHz */
+#define IQ_CENTRE_HF_HZ 4195500    /* 4209500 - 14000: the HF channel on the upper demodulator */
+/* Where the receiver must be tuned for the selected band (-B) */
+long iq_centre_hz(void);
 
 /* Options shared by the sources (set from the command line) */
 struct iq_options {

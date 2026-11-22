@@ -23,7 +23,7 @@
   var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
   var mensajes = [];            // todos los recibidos, del más reciente al más antiguo
-  var config = { stations518: '', messages518: '', stations490: '', messages490: '' };
+  var config = { stations518: '', messages518: '', stations490: '', messages490: '', stations4209: '', messages4209: '' };
   var configLeida = false;
   var filtro = { freq: 0, tema: '', texto: '', todo: false };
   var abiertos = {};            // id -> true
@@ -37,6 +37,8 @@
     return e;
   }
   function dos(n) { return (n < 10 ? '0' : '') + n; }
+  // 4209 es el canal de onda corta, 4209,5 kHz
+  function nombreFreq(f) { return (f === 4209 ? '4209,5' : String(f)) + ' kHz'; }
   function pedir(ruta) {
     return fetch(ruta, { cache: 'no-store' }).then(function (r) {
       if (!r.ok) throw new Error('el servidor respondió ' + r.status);
@@ -74,8 +76,9 @@
   }
 
   function seSigue(m) {
-    var est = m.freq === 490 ? config.stations490 : config.stations518;
-    var tem = m.freq === 490 ? config.messages490 : config.messages518;
+    var f = m.freq === 490 || m.freq === 4209 ? String(m.freq) : '518';
+    var est = config['stations' + f];
+    var tem = config['messages' + f];
     return est.indexOf(m.station) >= 0 && (OBLIGATORIOS.indexOf(m.subject) >= 0 || tem.indexOf(m.subject) >= 0);
   }
 
@@ -89,11 +92,12 @@
     var recibiendo = isFinite(vivo) && ahora - vivo < 3 * 60000;
     var origen = estado.source === 'rtlsdr' ? 'RTL-SDR' : estado.source === 'sdrplay' ? 'SDRplay' : estado.source === 'file' ? 'grabación' : (estado.source || '');
     $('punto-receptor').className = 'punto ' + (recibiendo ? 'ok' : 'mal');
+    var banda = estado.band === 'hf' ? '4209,5 kHz' : '518 y 490 kHz';
     $('texto-receptor').textContent = recibiendo ? 'Recibiendo' : 'Parado';
     $('detalle-receptor').textContent = recibiendo
-      ? (origen || 'receptor en marcha')
+      ? banda + (origen ? ' · ' + origen : '')
       : (isFinite(vivo) ? 'últimas muestras ' + haceCuanto(vivo, ahora) + (origen ? ' · ' + origen : '') : 'el receptor aún no ha arrancado');
-    ['518', '490'].forEach(function (f) {
+    ['518', '490', '4209'].forEach(function (f) {
       var t = Date.parse(estado['phasing_' + f] || '');
       $('sinc-' + f).textContent = isFinite(t) ? haceCuanto(t, ahora) : 'todavía ninguno';
     });
@@ -153,7 +157,7 @@
       var meta = crear('span', 'meta');
       var linea = primeraLinea(m.message);
       if (linea) meta.appendChild(crear('span', 'resumen-linea', linea));
-      meta.appendChild(document.createTextNode('estación ' + m.station + ' · ' + m.freq + ' kHz · ' + haceCuanto(m.recibido, ahora) + ' (' + fechaUtc(m.recibido) + ')'));
+      meta.appendChild(document.createTextNode('estación ' + m.station + ' · ' + nombreFreq(m.freq) + ' · ' + haceCuanto(m.recibido, ahora) + ' (' + fechaUtc(m.recibido) + ')'));
       if (!m.complete) { meta.appendChild(document.createTextNode(' · ')); meta.appendChild(crear('span', 'cortado', 'cortado')); }
       boton.appendChild(meta);
       boton.addEventListener('click', function () { alternar(m); });
@@ -161,7 +165,7 @@
       if (abiertos[m.id]) {
         var cuerpo = crear('div', 'cuerpo');
         cuerpo.appendChild(crear('pre', '', m.message));
-        cuerpo.appendChild(crear('p', 'nota', 'Recibido el ' + fechaUtc(m.recibido) + ' (' + horaLocal(m.recibido) + ' hora local) en ' + m.freq + ' kHz.'
+        cuerpo.appendChild(crear('p', 'nota', 'Recibido el ' + fechaUtc(m.recibido) + ' (' + horaLocal(m.recibido) + ' hora local) en ' + nombreFreq(m.freq) + '.'
           + (m.complete ? '' : ' La recepción se cortó antes del final del mensaje.')
           + (m.message.indexOf('*') >= 0 ? ' Cada asterisco es un carácter que no se pudo recibir bien.' : '')));
         li.appendChild(cuerpo);
@@ -214,7 +218,7 @@
   function pintarAjustes() {
     var raiz = $('ajustes');
     raiz.textContent = '';
-    [{ f: '518', nombre: '518 kHz · internacional, en inglés' }, { f: '490', nombre: '490 kHz · nacional, en el idioma del país' }].forEach(function (b) {
+    [{ f: '518', nombre: '518 kHz · internacional, en inglés' }, { f: '490', nombre: '490 kHz · nacional, en el idioma del país' }, { f: '4209', nombre: '4209,5 kHz · onda corta, en inglés' }].forEach(function (b) {
       var tagE = 'stations' + b.f, tagT = 'messages' + b.f;
       var t = crear('div', 'tarjeta');
       t.id = 'ajustes-' + b.f;
