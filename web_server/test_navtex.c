@@ -144,13 +144,12 @@ main (void)
   CHECK (m != NULL && cJSON_GetObjectItem (m, "id")->valueint != i && cJSON_IsTrue (cJSON_GetObjectItem (m, "unread")), "after 72 h it is new again");
   cJSON_Delete (j);
 
-  /* --- deleting hides the message, and its repeat does not bring it back */
+  /* --- the user cannot delete messages (IMO MSC.508(105), 6.1.1); what an earlier version hid is shown again */
   n = count_listed ();
-  m = listed ("GB20", &j); i = cJSON_GetObjectItem (m, "id")->valueint; cJSON_Delete (j);
-  CHECK (delete_messages ((unsigned int) i) == 1 && count_listed () == n - 1, "deleted");
-  add_message ("GB20", "ZCZC GB20\nGALE WARNING. TEST MESSAGE.\n", 518, 1);
-  CHECK (count_listed () == n - 1, "its repeat stays hidden");
-  CHECK (delete_messages (999999) == 0, "nothing to delete");
+  sql ("update messages set deleted = 1 where bbbb = 'GB20'");
+  CHECK (count_listed () == n - 1, "a row hidden by an earlier version");
+  sql ("update messages set deleted = 0 where deleted = 1");      /* what open_db() does once per process */
+  CHECK (count_listed () == n, "is shown again");
 
   /* --- retention: heard long ago goes, heard lately stays */
   CHECK (retention_seconds () == 72 * 3600, "72 h by default");
@@ -306,8 +305,9 @@ main (void)
   CHECK (s != NULL && strstr (s, "KEEP THIS ONE") != NULL && strstr (s, "WEEKS LATER") != NULL, "a later message with the same number does not replace it");
   free (s);
   n = count_listed ();
-  CHECK (delete_messages (0) >= 1 && count_listed () == 1, "delete all leaves what is tagged");
-  CHECK (delete_messages ((unsigned int) i) == 1 && count_listed () == 0, "one by one it can be deleted");
+  sql ("delete from messages where coalesce(keep,0) = 0");      /* the test starts over; the program has no such thing */
+  CHECK (count_listed () == 1, "only the tagged one is left");
+  sql ("delete from messages");
   for (n = 0; n < 51; n++)
     {
       char id[8], body[40];
@@ -329,6 +329,30 @@ main (void)
     free (ml);
   }
 
+  /* --- bridge alert management: ALF, ALC, HBT, ARC out; ACN in */
+  {
+    char b[96];
+    long id = -1, inst = -1;
+    char cmd = 0;
+    alf_sentence (b, sizeof (b), 140200, 'V', 1);
+    CHECK (strncmp (b, "$CRALF,1,1,0,140200.00,B,W,V,,3,1,1,0,NAVTEX SAR*", 49) == 0 && checksum_ok (b) && strlen (b) <= 82, "ALF: active, not acknowledged");
+    alf_sentence (b, sizeof (b), 140300, 'N', 2);
+    CHECK (strncmp (b, "$CRALF,1,1,0,140300.00,B,W,N,,3,1,2,0,NAVTEX SAR*", 49) == 0 && checksum_ok (b), "ALF: normal again, revision 2");
+    alc_sentence (b, sizeof (b), 1, 2);
+    CHECK (strncmp (b, "$CRALC,01,01,00,1,,3,1,2*", 25) == 0 && checksum_ok (b), "ALC: one alert in the list");
+    alc_sentence (b, sizeof (b), 0, 2);
+    CHECK (strncmp (b, "$CRALC,01,01,00,0*", 18) == 0 && checksum_ok (b), "ALC: empty list");
+    hbt_sentence (b, sizeof (b), 30, 13);
+    CHECK (strncmp (b, "$CRHBT,30,A,3*", 14) == 0 && checksum_ok (b), "HBT");
+    arc_sentence (b, sizeof (b), 140400, 3, 1, 'S');
+    CHECK (strncmp (b, "$CRARC,140400.00,,3,1,S*", 24) == 0 && checksum_ok (b), "ARC");
+    CHECK (acn_parse ("$IIACN,140500.00,,3,1,A,C*62\r\n", &id, &inst, &cmd) == 1 && id == 3 && inst == 1 && cmd == 'A', "ACN: acknowledge");
+    CHECK (acn_parse ("noise $IIACN,,,0,,Q,C*6E\r\n", &id, &inst, &cmd) == 1 && id == 0 && inst == 0 && cmd == 'Q', "ACN: repeat all, empty time and instance");
+    CHECK (acn_parse ("$IIACN,140500.00,,3,1,A,C*00", &id, &inst, &cmd) == 0, "ACN: wrong checksum");
+    CHECK (acn_parse ("$IIACN,140500.00,FEC,3,1,A,C*22", &id, &inst, &cmd) == 0, "ACN: another manufacturer's alert");
+    CHECK (acn_parse ("$IIACN,140500.00,,3,1,X,C*7B", &id, &inst, &cmd) == 0 && acn_parse ("$IIACK,003*56", &id, &inst, &cmd) == 0, "ACN: unknown command, another sentence");
+    CHECK (set_setting ("nrx.bam", "on") == 0 && set_setting ("nrx.bam", "off") == 0 && set_setting ("nrx.bam", "yes") != 0, "bridge alert setting");
+  }
   CHECK (set_setting ("nrx.format", "iec") == 0 && set_setting ("nrx.format", "furuno") == 0 && set_setting ("nrx.format", "x") != 0, "NRX form");
 
   unlink (DATA_FILE);

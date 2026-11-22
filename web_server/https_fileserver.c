@@ -356,27 +356,9 @@ http_ahc (void *cls,
   }
   if (strncmp (url, "/api/messages/delete/", 21) == 0)
   {
-      /* POST /api/messages/delete/<id>  or  .../all : hides them; see delete_messages() */
-      const char *what = url + 21;
-      unsigned long m_id = 0;
-      char *end;
-      char answer[40];
-      int n;
-
-      if (0 != strcmp (method, MHD_HTTP_METHOD_POST) || !is_own_request (connection))
-        return send_text (connection, MHD_HTTP_FORBIDDEN, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
-      if (strcmp (what, "all") != 0)
-      {
-        errno = 0;
-        m_id = strtoul (what, &end, 10);
-        if (!isdigit ((unsigned char) what[0]) || errno != 0 || *end != '\0' || m_id == 0 || m_id > 0x7fffffffUL)
-          return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
-      }
-      n = delete_messages ((unsigned int) m_id);
-      if (n < 0)
-        return send_text (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, ERROR_JSON, "application/json", 0);
-      snprintf (answer, sizeof (answer), "{\"deleted\":%d}", n);
-      return send_text (connection, MHD_HTTP_OK, answer, "application/json", 0);
+      /* Gone since 1.7.0: the user must not be able to erase messages from the memory (IMO MSC.508(105), 6.1.1).
+         They leave on their own when their retention time is up. */
+      return send_text (connection, MHD_HTTP_GONE, "{\"error\":\"messages cannot be deleted (IMO MSC.508(105), 6.1.1)\"}", "application/json", 0);
   }
   if (strncmp (url, "/api/messages/keep/", 19) == 0)
   {

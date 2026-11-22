@@ -47,13 +47,32 @@ void mask_to_letters (unsigned long mask, char *out);        /* out: 27 bytes */
 /* 1 when the text holds a valid "$--CRQ,NRM*hh" query */
 int is_nrm_query (const char *text);
 
+/* Bridge alert management (IMO MSC.302(87); sentences of IEC 61162-1 ed. 5 as IEC 62923 uses them), besides ALR / ACK.
+   The one alert of this program: search and rescue information received, identifier 3 (the number IEC 61097-6
+   gives the alarm in ALR), instance 1, category B, priority warning, no manufacturer code.
+     $CRALF,1,1,0,hhmmss.00,B,W,V,,3,1,revision,0,NAVTEX SAR*hh     state V: active, not acknowledged; N: normal
+     $CRALC,01,01,00,1,,3,1,revision*hh                             the cyclic list of active alerts (0 entries: none)
+     $CRHBT,30,A,n*hh                                               heartbeat, n = 0..9
+     $CRARC,hhmmss.00,,3,1,S*hh                                     a command that is not carried out (silence, transfer)
+   acn_parse() returns 1 for a valid "$--ACN,time,manufacturer,identifier,instance,command,C*hh" found in the text
+   and gives the identifier (0 = all alerts), the instance (0 when empty) and the command (A, Q, O or S).
+   The buffers: 96 bytes. */
+void alf_sentence (char *out, size_t out_size, int hhmmss, char state, int revision);
+void alc_sentence (char *out, size_t out_size, int active, int revision);
+void hbt_sentence (char *out, size_t out_size, int interval, int seq);
+void arc_sentence (char *out, size_t out_size, int hhmmss, long identifier, long instance, char command);
+int acn_parse (const char *text, long *identifier, long *instance, char *command);
+
 /* Starts the background sender. It reads its two settings every few seconds, so a
    change needs no restart:  nrx.udp     "host:port" to send datagrams to (empty: off)
                              nrx.tcp     port of a server other programs connect to (0: off)
                              nrx.format  "furuno" (default) or "iec"
+                             nrx.bam     "on": also the bridge alert management sentences (ALF on every change,
+                                         ALC and HBT every 30 s); "off" (default)
    While a search and rescue message waits to be acknowledged it also sends the ALR
-   sentence every 30 s. From the TCP clients it takes the ACK sentence, the NRM sentence
-   and its query (CRQ). */
+   sentence every 30 s. From the TCP clients it takes the ACK sentence, the ACN sentence
+   (acknowledge, or repeat the alert; silence and transfer are answered with ARC), the NRM
+   sentence and its query (CRQ). */
 void nrx_start (void);
 
 /* {"udp":"192.168.1.255:10110","tcp":10110,"clients":1,"sent":12,"last_id":57,"error":""} */

@@ -28,7 +28,7 @@ Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.c
 | Salida para otros programas | API en JSON; [S.A.T.-APRS+](https://github.com/EA7JRS/sat-aprs) la usa para convertir los mensajes en avisos y para manejar el receptor desde su consola |
 | Mensajes incompletos o con errores | Se guardan marcados, con su número de caracteres mal recibidos; una copia mejor sustituye a una peor, nunca al revés |
 | Reglas de un receptor NAVTEX | Recepción buena con menos de un 4 % de errores; cada mensaje se recuerda 72 horas para no repetirlo; los de número 00 se muestran siempre; se comprueba el turno de la letra |
-| Borrar, conservar y guardar | Borrar un mensaje o todos; marcar mensajes para conservarlos siempre; guardar todos en un archivo de texto o CSV; tiempo de conservación ajustable |
+| Conservar y guardar | Los mensajes no se pueden borrar a mano (MSC.508(105), 6.1.1): salen solos al cumplir su tiempo; marcar mensajes para conservarlos siempre; guardar todos en un archivo de texto o CSV; tiempo de conservación ajustable |
 | Alarma de búsqueda y salvamento | Un mensaje del tema D da una alarma, en pantalla y sonora, que solo se apaga a mano |
 | Salida NMEA 0183 | Cada mensaje nuevo en sentencias `NRX` (forma de Furuno o de la norma IEC 61097-6) y la alarma en `ALR`, por UDP y por un servidor TCP. Por TCP admite `ACK` para apagar la alarma y `NRM` para ver y cambiar desde otro equipo las estaciones y temas que se siguen |
 
@@ -243,7 +243,6 @@ Para que otro programa recoja los mensajes por la red. Todo en JSON y con las ho
 | `GET /api/nrx` | Estado de la salida NMEA 0183 |
 | `POST /api/alarm/ack` | Reconoce la alarma de búsqueda y salvamento |
 | `POST /api/messages/keep/<id>/1` o `/0` | Marca un mensaje para conservarlo siempre, o quita la marca |
-| `POST /api/messages/delete/<id>` o `/all` | Borra un mensaje o todos |
 
 ```json
 {"id":5,"bbbb":"EE39","station":"E","subject":"E","number":39,"freq":490,
@@ -256,7 +255,7 @@ Para que otro programa recoja los mensajes por la red. Todo en JSON y con las ho
 
 Un mensaje del tema D sin reconocer lleva además `"alarm":true`, y `/api/status` dice cuántos hay en `sar_alarms`.
 
-Los cambios (`/api/settings/<clave>/<valor>`, `/saveconfig/<ajuste>/<valor>`, `/api/messages/delete/…` y `/api/alarm/ack`) solo se aceptan por `POST` y con la cabecera `X-Navtex`, de modo que otra página abierta en el mismo navegador no puede cambiar nada.
+Los cambios (`/api/settings/<clave>/<valor>`, `/saveconfig/<ajuste>/<valor>`, `/api/messages/keep/…` y `/api/alarm/ack`) solo se aceptan por `POST` y con la cabecera `X-Navtex`, de modo que otra página abierta en el mismo navegador no puede cambiar nada.
 
 ## Reglas de un receptor NAVTEX
 
@@ -281,9 +280,9 @@ El programa sigue lo que piden a un receptor la resolución MSC.508(105) de la O
 
 El pitido depende del navegador: la mayoría no deja sonar una página hasta que se ha tocado alguna vez, y no llega a los 75–85 dBA que pide la norma para un equipo de puente. Este programa no está homologado ni sustituye a un receptor que lo esté.
 
-**Conservar.** Un mensaje marcado con «Conservar siempre» no se borra al cumplir el tiempo de conservación, ni lo sustituye otro posterior con el mismo número. Hasta 50 (MSC.508(105), 6.1.2). «Borrar todos» los respeta.
+**Conservar.** Un mensaje marcado con «Conservar siempre» no se borra al cumplir el tiempo de conservación, ni lo sustituye otro posterior con el mismo número. Hasta 50 (MSC.508(105), 6.1.2).
 
-**Borrar.** La norma dice que el usuario no debe poder borrar mensajes (MSC.508(105), 6.1.1); este programa lo permite porque es una ayuda y no el receptor obligatorio. Un mensaje borrado deja de verse, pero su identidad se sigue recordando hasta 72 horas: la repetición de la estación no lo trae de vuelta.
+**Borrar.** El usuario no puede borrar mensajes de la memoria (MSC.508(105), 6.1.1): no hay botón ni llamada de la API para ello (`/api/messages/delete/…` contesta 410). Un mensaje sale solo, al cumplir su tiempo de conservación sin volver a oírse. Hasta la versión 1.6.1 se podían ocultar; al actualizar, los que estuvieran ocultos vuelven a verse.
 
 **Conservación.** De serie, un mensaje se borra a las 72 horas de la última vez que se oyó. Se puede alargar hasta un año (pestaña Receptores). Mientras la estación lo siga emitiendo, no se borra.
 
@@ -322,12 +321,22 @@ En las dos, ninguna sentencia pasa de 82 caracteres y los caracteres reservados 
 
 **Alarma.** Mientras haya un mensaje de búsqueda y salvamento sin reconocer, sale cada 30 segundos `$CRALR,hhmmss.00,003,A,V,NAVTEX: Search and rescue information*hh`; al reconocerla, una vez más con `V,A`. Por el servidor TCP se puede reconocer con `$--ACK,003*hh`.
 
+**Gestión de alertas del puente** (ajuste `nrx.bam`, apagado de serie). Además de `ALR`, la misma alerta sale con las sentencias que usa la gestión de alertas del puente (MSC.302(87), IEC 62923):
+
+```
+$CRALF,1,1,0,122537.00,B,W,V,,3,1,2,0,NAVTEX SAR*5B     en cada cambio: V sin reconocer, N normal
+$CRALC,01,01,00,1,,3,1,2*5E                             cada 30 s: lista de alertas activas
+$CRHBT,30,A,1*10                                        cada 30 s: latido
+```
+
+Por TCP acepta `$--ACN,hhmmss.ss,,3,1,A,C*hh` (reconocer) y `…,Q,C` (repetir la alerta); silenciar (S) y transferir (O) no existen aquí y se contestan con `ARC`. Los formatos están tomados de manuales de equipos que las usan, no de las normas; el identificador (3), la categoría (B) y la prioridad (aviso) de la alerta están sin confirmar.
+
 Se ajusta en la pestaña Receptores:
 
 - **UDP**: destino `equipo:puerto` (vale la dirección de difusión de la red, por ejemplo `192.168.1.255:10110`). Una sentencia por datagrama.
 - **TCP**: puerto de un servidor al que se conectan los programas (hasta 8 a la vez).
 
-Solo salen los mensajes que llegan desde que se enciende la salida, no los ya guardados. La salida no tiene contraseña; de quien se conecta por TCP solo se atienden las sentencias `ACK`, `NRM` y `CRQ`. Con ellas se puede apagar la alarma y cambiar qué estaciones y temas se siguen, igual que desde la interfaz web: úsela solo en una red de confianza.
+Solo salen los mensajes que llegan desde que se enciende la salida, no los ya guardados. La salida no tiene contraseña; de quien se conecta por TCP solo se atienden las sentencias `ACK`, `ACN`, `NRM` y `CRQ`. Con ellas se puede apagar la alarma y cambiar qué estaciones y temas se siguen, igual que desde la interfaz web: úsela solo en una red de confianza.
 
 **NMEA 2000.** No existe un mensaje normalizado de NMEA 2000 para el texto de NAVTEX; la salida normalizada es la sentencia `NRX` de NMEA 0183. Este programa no inventa uno: al bus llegan a través de S.A.T.-APRS+, que los recoge por la API.
 

@@ -183,6 +183,86 @@ is_alarm_ack (const char *text)
   return 0;
 }
 
+/* ------------------------------------------------------------ bridge alert management */
+
+static void
+with_checksum (char *out, size_t out_size, const char *body)
+{
+  unsigned char sum = 0;
+  size_t i;
+  for (i = 0; body[i] != '\0'; i++) sum ^= (unsigned char) body[i];
+  snprintf (out, out_size, "$%s*%02X\r\n", body, sum);
+}
+
+void
+alf_sentence (char *out, size_t out_size, int hhmmss, char state, int revision)
+{
+  char body[80];
+  snprintf (body, sizeof (body), "CRALF,1,1,0,%06d.00,B,W,%c,,3,1,%d,0,NAVTEX SAR", hhmmss, state, revision < 1 ? 1 : revision > 99 ? 99 : revision);
+  with_checksum (out, out_size, body);
+}
+
+void
+alc_sentence (char *out, size_t out_size, int active, int revision)
+{
+  char body[48];
+  if (active) snprintf (body, sizeof (body), "CRALC,01,01,00,1,,3,1,%d", revision < 1 ? 1 : revision > 99 ? 99 : revision);
+  else snprintf (body, sizeof (body), "CRALC,01,01,00,0");
+  with_checksum (out, out_size, body);
+}
+
+void
+hbt_sentence (char *out, size_t out_size, int interval, int seq)
+{
+  char body[32];
+  snprintf (body, sizeof (body), "CRHBT,%d,A,%d", interval, ((seq % 10) + 10) % 10);
+  with_checksum (out, out_size, body);
+}
+
+void
+arc_sentence (char *out, size_t out_size, int hhmmss, long identifier, long instance, char command)
+{
+  char body[64];
+  snprintf (body, sizeof (body), "CRARC,%06d.00,,%ld,%ld,%c", hhmmss, identifier, instance, command);
+  with_checksum (out, out_size, body);
+}
+
+int
+acn_parse (const char *text, long *identifier, long *instance, char *command)
+{
+  const char *p;
+
+  for (p = text; (p = strchr (p, '$')) != NULL; p++)
+    {
+      unsigned char sum = 0;
+      unsigned int given = 0;
+      const char *q, *f[6];
+      int n = 0;
+      char *end;
+      long id, inst;
+
+      for (q = p + 1; *q != '\0' && *q != '*' && *q != '\r' && *q != '\n' && q - p < 80; q++) sum ^= (unsigned char) *q;
+      if (*q != '*' || sscanf (q + 1, "%2X", &given) != 1 || given != sum) continue;
+      if (q - p < 8 || strncmp (p + 3, "ACN,", 4) != 0) continue;
+      /* the six fields: time, manufacturer, identifier, instance, command, flag */
+      f[n++] = p + 7;
+      for (const char *c = p + 7; c < q && n < 6; c++) if (*c == ',') f[n++] = c + 1;
+      if (n != 6) continue;
+      if (f[2] - f[1] != 1) continue;                       /* a manufacturer code: not one of ours */
+      id = strtol (f[2], &end, 10);
+      if (end == f[2] || *end != ',' || id < 0) continue;
+      inst = strtol (f[3], &end, 10);
+      if (*end != ',' || inst < 0) continue;
+      if (f[5] - f[4] != 2 || strchr ("AQOS", f[4][0]) == NULL || f[4][0] == '\0') continue;
+      if (f[5][0] != 'C' || f[5] + 1 != q) continue;
+      *identifier = id;
+      *instance = inst;
+      *command = f[4][0];
+      return 1;
+    }
+  return 0;
+}
+
 /* ------------------------------------------------------------ NRM and CRQ */
 
 /* Length of the sentence that starts at p ("$...*hh") when its checksum is right, else 0 */
@@ -494,6 +574,9 @@ answer_client (int fd, const char *said)
     }
 }
 
+static int bam_repeat;               /* a client asked for the alert again (ACN with command Q) */
+static int utc_hhmmss (void);
+
 /* A client that hung up, or that does not read, is dropped */
 static void
 send_tcp (const char *text, size_t n)
@@ -510,6 +593,23 @@ send_tcp (const char *text, size_t n)
         {
           said[r] = '\0';
           if (is_alarm_ack (said) && acknowledge_alarms () > 0) { printf ("NRX: alarm acknowledged by a TCP client\n"); fflush (stdout); }
+          {
+            long alert, instance;
+            char command;
+            /* Bridge alert management: acknowledge, or repeat the alert; this program has no sound to silence here and
+               cannot hand the alert over, so those two are answered with ARC */
+            if (acn_parse (said, &alert, &instance, &command) && (alert == 3 || (alert == 0 && command == 'Q')))
+              {
+                if (command == 'A') { if (acknowledge_alarms () > 0) { printf ("NRX: alert acknowledged by a TCP client (ACN)\n"); fflush (stdout); } }
+                else if (command == 'Q') bam_repeat = 1;
+                else
+                  {
+                    char arc[96];
+                    arc_sentence (arc, sizeof (arc), utc_hhmmss (), alert, instance, command);
+                    send (clients[i], arc, strlen (arc), MSG_NOSIGNAL);
+                  }
+              }
+          }
           answer_client (clients[i], said);
         }
       if (r == 0 || (r < 0 && errno != EAGAIN && errno != EWOULDBLOCK) ||
@@ -582,12 +682,13 @@ sender (void *arg)
 {
   int i;
   int alarm_was = 0;
-  time_t last_alr = 0;
+  time_t last_alr = 0, last_bam = 0;
+  int bam_revision = 1, bam_seq = 0, bam_was = -1;
   (void) arg;
   for (i = 0; i < MAX_CLIENTS; i++) clients[i] = -1;
   for (;;)
     {
-      char udp[96], tcp[16], format[16];
+      char udp[96], tcp[16], format[16], bam[8];
       int port, count = 0, iec, alarms;
       char *ml;
       cJSON *list, *m;
@@ -595,6 +696,7 @@ sender (void *arg)
       get_setting ("nrx.udp", udp, sizeof (udp));
       get_setting ("nrx.tcp", tcp, sizeof (tcp));
       get_setting ("nrx.format", format, sizeof (format));
+      get_setting ("nrx.bam", bam, sizeof (bam));
       iec = strcmp (format, "iec") == 0;
       out_iec = iec;
       port = atoi (tcp);
@@ -646,6 +748,33 @@ sender (void *arg)
           last_alr = time (NULL);
         }
       alarm_was = alarms > 0;
+
+      /* Bridge alert management: the alert sentence on every change (and when asked), the list and the heartbeat every 30 s */
+      if (strcmp (bam, "on") == 0 && (udp[0] != '\0' || port != 0))
+        {
+          char line[96];
+          int active = alarms > 0;
+          if (bam_was >= 0 && active != bam_was) bam_revision = bam_revision % 99 + 1;
+          if ((bam_was >= 0 && active != bam_was) || (bam_was < 0 && active) || bam_repeat)
+            {
+              alf_sentence (line, sizeof (line), utc_hhmmss (), active ? 'V' : 'N', bam_revision);
+              if (udp[0] != '\0') send_udp (udp, line);
+              if (port != 0) send_tcp (line, strlen (line));
+            }
+          bam_was = active;
+          bam_repeat = 0;
+          if (time (NULL) - last_bam >= 30)
+            {
+              hbt_sentence (line, sizeof (line), 30, bam_seq++);
+              if (udp[0] != '\0') send_udp (udp, line);
+              if (port != 0) send_tcp (line, strlen (line));
+              alc_sentence (line, sizeof (line), active, bam_revision);
+              if (udp[0] != '\0') send_udp (udp, line);
+              if (port != 0) send_tcp (line, strlen (line));
+              last_bam = time (NULL);
+            }
+        }
+      else { bam_was = -1; bam_repeat = 0; }
 
       pthread_mutex_lock (&lock);
       snprintf (cur_udp, sizeof (cur_udp), "%s", udp);

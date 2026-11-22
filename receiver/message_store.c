@@ -77,6 +77,9 @@ void open_db(sqlite3 **db) {
                 // still remembered; heard: last time the message was received (unix time, UTC)
                 sqlite3_exec(*db, "alter table messages add column errors integer default 0", NULL, NULL, NULL);
                 sqlite3_exec(*db, "alter table messages add column deleted integer default 0", NULL, NULL, NULL);
+                // Since 1.7.0 the user cannot delete messages (IMO MSC.508(105), 6.1.1): what an earlier
+                // version hid comes back, and leaves as any other message, when its time is up.
+                sqlite3_exec(*db, "update messages set deleted = 0 where deleted = 1", NULL, NULL, NULL);
                 sqlite3_exec(*db, "alter table messages add column heard integer", NULL, NULL, NULL);
                 // alarm: 1 while a search and rescue message (B2 = D) waits to be acknowledged by hand
                 sqlite3_exec(*db, "alter table messages add column alarm integer default 0", NULL, NULL, NULL);
@@ -413,25 +416,6 @@ void purge_old_messages() {
                 sqlite3_finalize(stmt);
         }
 	sqlite3_close(db);
-}
-
-// Hides one message (id > 0) or all of them (id == 0). The rows stay until purge_old_messages()
-// removes them, so a repeat of the broadcast does not bring them back. Returns how many, or -1.
-int delete_messages(unsigned int id) {
-        sqlite3 *db;
-        sqlite3_stmt *stmt;
-        int n = -1;
-
-        open_db(&db);
-        if (db == NULL) return -1;
-        if (sqlite3_prepare_v2(db, id ? "update messages set deleted = 1, alarm = 0, keep = 0, age = '' where id = ?1 and coalesce(deleted,0) = 0"
-                                      : "update messages set deleted = 1, alarm = 0, age = '' where coalesce(deleted,0) = 0 and coalesce(keep,0) = 0", -1, &stmt, NULL) == SQLITE_OK) {
-                if (id) sqlite3_bind_int64(stmt, 1, (sqlite3_int64) id);
-                if (sqlite3_step(stmt) == SQLITE_DONE) n = sqlite3_changes(db);
-                sqlite3_finalize(stmt);
-        }
-        sqlite3_close(db);
-        return n;
 }
 
 // Tags a message for permanent retention, or removes the tag (IMO MSC.508(105), 6.1.2: "the user
@@ -939,6 +923,7 @@ int valid_setting(const char *tag, const char *value) {
         if (strcmp(tag, "nrx.udp") == 0) return valid_host_port(value);
         // form of the NRX sentence: the one of Furuno's receivers, or the one of IEC 61097-6 (annex C)
         if (strcmp(tag, "nrx.format") == 0) return one_of(value, "furuno", "iec", NULL, NULL);
+        if (strcmp(tag, "nrx.bam") == 0) return one_of(value, "on", "off", NULL, NULL);
         if (strcmp(tag, "nrx.tcp") == 0) return value[0] != '\0' && all_of(value, "0123456789", 5) && (atoi(value) == 0 || (atoi(value) >= 1024 && atoi(value) <= 65535));
         if ((strncmp(tag, "rx1.", 4) != 0 && strncmp(tag, "rx2.", 4) != 0)) return 0;
         key = tag + 4;

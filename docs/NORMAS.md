@@ -1,6 +1,6 @@
 # Navtex · Normas y reglamentos
 
-© 2026 Manuel - EA7JRS · versión 1.6.1 · ediciones comprobadas el 22 de noviembre de 2026
+© 2026 Manuel - EA7JRS · versión 1.7.0 · ediciones comprobadas el 22 de noviembre de 2026
 
 Este documento dice qué normas contempla el programa, qué aplica de cada una y qué no. Sirve para saber hasta dónde se puede confiar en él y para revisar el código contra el texto de cada norma.
 
@@ -48,7 +48,7 @@ Este documento dice qué normas contempla el programa, qué aplica de cada una y
 | Un mensaje ya recibido no se vuelve a presentar | UIT-R M.540-2, anexo II, 4; Manual NAVTEX, 7.5 | Se anota solo que se ha vuelto a oír (`heard`) |
 | Memoria para al menos 200 identidades y 200 mensajes de 500 caracteres, que no se pierda al apagar | MSC.508(105), 6.1.1 y 6.2.1 | Base de datos en disco, sin límite de número. Los mensajes se conservan 72 horas desde la última vez que se oyen, ampliable hasta un año |
 | El usuario puede marcar mensajes para conservarlos siempre, hasta un 25 % de la memoria; las marcas se pueden quitar | MSC.508(105), 6.1.2 | Botón «Conservar siempre» en cada mensaje. Hasta 50, la cuarta parte de los 200 de la norma. Un mensaje conservado no se borra al cumplir el tiempo de conservación ni lo sustituye otro posterior con el mismo número |
-| El usuario no debe poder borrar mensajes de la memoria | MSC.508(105), 6.1.1 | **No se cumple, a propósito:** el programa permite borrar un mensaje o todos. El borrado solo lo oculta: la identidad se sigue recordando 72 horas |
+| El usuario no debe poder borrar mensajes de la memoria | MSC.508(105), 6.1.1 | No hay forma de borrar un mensaje, ni en la interfaz ni en la API. Salen solos al cumplir el tiempo de conservación (desde la 1.7.0; antes se podían ocultar) |
 | Con la memoria llena se sobrescribe el más antiguo | MSC.508(105), 6.1.1 | No hay memoria que se llene: los mensajes se quitan por tiempo, nunca antes de 72 horas |
 | Un mensaje nuevo sigue a la vista hasta que se reconoce o pasan 24 horas | MSC.508(105), 5.2.1 | Queda marcado como «nuevo» hasta que se abre o pasan 24 horas |
 | Estaciones y temas no se pierden con un corte de alimentación de menos de 6 horas | MSC.508(105), 6.3 | Se guardan en disco: no se pierden |
@@ -81,7 +81,7 @@ De las 257 estaciones de la tabla de la UIT, 254 siguen la regla de la letra; la
 | Suma de control, longitud máxima de 82 caracteres, caracteres reservados como `^hh` | IEC 61162-1 | Comprobado en `make check`; la suma de control se contrasta con el ejemplo de IEC 61097-6 |
 | Sentencia `NRM` para ver y elegir estaciones y temas desde otro equipo, y para pedir los mensajes guardados; consulta con `CRQ` | IEC 61097-6, anexo C.2 y 4.4 | Por el servidor TCP: máscara de lo guardado (función 1) y petición de mensajes (función 0). **Parcial:** las máscaras de impresora y de puerto de datos (funciones 2 y 3) no existen; todo lo recibido se guarda y sale, y la máscara decide lo que se enseña |
 | No se pueden excluir los temas A, B, D y L | IEC 61097-6, 4.3.7 | Tampoco por `NRM`: se añaden siempre |
-| Interfaz de gestión de alertas del puente | MSC.508(105), 9.4, que remite a MSC.302(87) | **No hecho.** La alerta sale con las sentencias `ALR` y `ACK`, que son las de la edición de 2005 de IEC 61097-6. La gestión de alertas del puente usa otras sentencias (IEC 62923), y la enmienda de 2019 de IEC 61097-6 no se ha podido consultar |
+| Interfaz de gestión de alertas del puente | MSC.508(105), 9.4, que remite a MSC.302(87) | **Parcial**, con el ajuste `nrx.bam` encendido: la alerta de búsqueda y salvamento sale con las sentencias de IEC 61162-1 ed. 5 que usa IEC 62923 —`ALF` en cada cambio de estado, `ALC` (lista de alertas activas) y `HBT` (latido) cada 30 segundos— y se reconoce con `ACN` (orden A); la orden Q la repite, y silenciar o transferir (S, O) se contestan con `ARC`. Formatos tomados de los manuales de equipos que las usan (Furuno GS-100, JRC JFE-400, Icom GM600), no de las normas, que son de pago. **Sin confirmar:** el identificador de la alerta (3, el número que IEC 61097-6 da a la alarma en `ALR`), su categoría (B) y prioridad (aviso); la enmienda de 2019 de IEC 61097-6 no se ha podido consultar. `ALR` y `ACK` siguen saliendo |
 | Interfaz para impresora, si no la lleva integrada | MSC.508(105), 9.3 | No hay; los mensajes se guardan en un archivo de texto o CSV para imprimirlos |
 
 **NMEA 2000.** No existe un mensaje normalizado de NMEA 2000 para el texto de NAVTEX, y este programa no inventa uno. Al bus llega a través de [S.A.T.-APRS+](https://github.com/EA7JRS/sat-aprs).
@@ -93,8 +93,7 @@ De las 257 estaciones de la tabla de la UIT, 254 siguen la regla de la letra; la
 - **Impresora o pantalla dedicada** (MSC.508(105), 5): la interfaz es una página web.
 - **Volumen de la alarma** (IEC 61097-6, 4.3.9.1): no se garantiza.
 - **Puerto serie de IEC 61162-1:** la salida es por red.
-- **Borrado de mensajes** (MSC.508(105), 6.1.1): la norma no lo permite y el programa sí, porque es una ayuda y no el receptor obligatorio.
-- **Gestión de alertas del puente** (MSC.508(105), 9.4; MSC.302(87); IEC 62923): no hecha.
+- **Gestión de alertas del puente** (MSC.508(105), 9.4; MSC.302(87); IEC 62923): solo las sentencias, sin ensayo de IEC 62923 y con el identificador de la alerta sin confirmar.
 - **Recepción de información de seguridad por HF** (MSC.508(105), 4.2): solo se recibe 4209,5 kHz; no las demás frecuencias de HF, ni la sintonía por horario de todas las estaciones, ni el aviso por llamada selectiva digital.
 - **Pantalla** (MSC.508(105), 5): 32 caracteres por línea y 16 líneas se cumplen en cualquier pantalla normal, pero dependen del navegador y del equipo donde se abra.
 

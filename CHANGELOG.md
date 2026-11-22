@@ -2,6 +2,14 @@
 
 Fork EA7JRS/Navtex del receptor NAVTEX de bartelvdh. Las entradas dicen también qué se probó y qué no. Lo descrito en una fase puede haber cambiado en las posteriores (por ejemplo, los servicios y sus ajustes): el estado actual es el del [README](README.md).
 
+## [1.7.0] - 2026-11-22
+
+- **Los mensajes ya no se pueden borrar a mano** (OMI MSC.508(105), 6.1.1: el usuario no debe poder borrar mensajes de la memoria). Fuera los botones «Borrar este mensaje» y «Borrar todos»; `/api/messages/delete/…` contesta 410. Los mensajes salen solos al cumplir su tiempo de conservación. Los que una versión anterior hubiera ocultado vuelven a verse al actualizar.
+- **Gestión de alertas del puente** (MSC.302(87); sentencias de IEC 61162-1 ed. 5 que usa IEC 62923), con el ajuste nuevo `nrx.bam` (apagado de serie; pestaña Receptores): `ALF` en cada cambio de estado de la alerta de búsqueda y salvamento, `ALC` y `HBT` cada 30 segundos; de los clientes TCP acepta `ACN` (A reconoce, Q repite; S y O se contestan con `ARC`). `ALR` y `ACK` siguen igual. El identificador de la alerta (3), su categoría y prioridad están sin confirmar con la norma.
+- Probado con el programa real: mensaje de muestra de búsqueda y salvamento (escrito a mano, nunca emitido) → `NRX`, `ALR` y `ALF` por TCP; `ACN` S → `ARC`; `ACN` Q → `ALF` otra vez; `ACN` A → alarma reconocida, `ALR` y `ALF` en estado normal; `CRQ,NRM` → las tres máscaras. 113 comprobaciones en `make check`. Sin probar con un equipo de puente real.
+
+---
+
 ## [1.6.1] - 2026-11-22
 
 - Cabecera: el botón «Acerca de» pasa al extremo derecho, después de los de aspecto e idioma.

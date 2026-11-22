@@ -37,7 +37,6 @@ int slot_minute(char b1);
 int in_own_slot(char b1, const char *timestamp);
 long retention_seconds(void);
 /* Hide one message (id) or all (0); export them; the API with repeats */
-int delete_messages(unsigned int id);
 char *export_messages(int csv, int freq);
 char *get_messages_changed(unsigned int since_id, long heard_after, int limit);
 /* Alarm of the search and rescue messages (B2 = D), reset only by hand */

@@ -302,13 +302,6 @@
     if (!lista.length || lista[0].d === null) return null;
     return { nombre: lista[0].e.nombre, porTurno: false };
   }
-  function borrar(id) {
-    return enviar('/api/messages/delete/' + id).then(leerTodo).catch(function (e) {
-      var error = $('error-general');
-      error.hidden = false;
-      error.textContent = tr('No se pudo borrar: ') + e.message + '.';
-    });
-  }
 
   function pintarLista() {
     var lista = $('lista');
@@ -367,11 +360,6 @@
           });
         });
         cuerpo.appendChild(bk);
-        cuerpo.appendChild(document.createTextNode(' '));
-        var bb = crear('button', 'boton pequeno', tr('Borrar este mensaje'));
-        bb.type = 'button'; bb.id = 'borrar-' + m.id;
-        bb.addEventListener('click', function () { borrar(m.id); });
-        cuerpo.appendChild(bb);
         li.appendChild(cuerpo);
       }
       lista.appendChild(li);
@@ -759,6 +747,8 @@
       function (x) { ponerAjuste('nrx.udp', /^[A-Za-z0-9.-]{1,70}:\d{1,5}$/.test(x) ? x : '').then(pintarSalida); })));
     r.appendChild(campo(tr('NMEA 0183 por TCP: puerto del servidor (0, apagado)'), texto('nrx-tcp', v('nrx.tcp', '0'), '10110',
       function (x) { var n = Math.round(Number(x)); ponerAjuste('nrx.tcp', String(isFinite(n) && n >= 1024 && n <= 65535 ? n : 0)).then(pintarSalida); })));
+    r.appendChild(campo(tr('Gestión de alertas de puente (sentencias ALF, ALC y HBT; acepta ACN)'), selector('nrx-bam', [['off', tr('Apagada (solo ALR y ACK)')], ['on', tr('Encendida')]], v('nrx.bam', 'off'),
+      function (x) { ponerAjuste('nrx.bam', x); })));
     r.appendChild(campo(tr('Forma de la sentencia NRX'), selector('nrx-format', [['furuno', tr('Furuno (la de la app y el plotter APRS LoRa+)')], ['iec', tr('IEC 61097-6 (la de la norma)')]], v('nrx.format', 'furuno'),
       function (x) { ponerAjuste('nrx.format', x); })));
     raiz.appendChild(r);
@@ -847,9 +837,6 @@
     enviar('/api/alarm/ack').then(leerTodo).catch(function (e) {
       $('alarma-texto').textContent = tr('No se pudo reconocer la alarma: ') + e.message + '.';
     });
-  });
-  $('borrar-todos').addEventListener('click', function () {
-    if (window.confirm(tr('¿Borrar todos los mensajes guardados, salvo los conservados? Los que las estaciones repitan en las próximas 72 horas no volverán a aparecer.'))) borrar('all');
   });
 
   // Aspecto: botón con menú, como en la WebUI del tracker APRS LoRa+. Los iconos son de Bootstrap Icons (MIT).
