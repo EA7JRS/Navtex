@@ -1,0 +1,261 @@
+area,pais,estacion,lat,lon,khz,b1,horas,alcance,idioma,estado
+I,Belgium,Oostende Radio,51°10'.95N,002°48'.47E,518,T,"0310,0710,1110,1510,1910,2310",55,English,Operational
+I,Belgium,Oostende (Thames Approaches),51°10'.95N,002°48'.47E,518,V,"0330,0730,1130,1530,1930,2330",150,English,Operational; broadcast for U.K.
+I,Estonia,Tallinn,59°27'.84N,024°21'.42E,518,U,"0320,0720,1120,1520,1920,2320",250,English,Operational
+I,France,Cross Corsen,48°28'.56N,005°03'.18W,518,A,"0000,0400,0800,1200,1600,2000",300,English,Operational
+I,Germany,Pinneberg,53°40'.50N,009°48'.50E,518,S,"0300,0700,1100,1500,1900,2300",250,English,Operational
+I,Iceland,Reykjavik Radio/Saudanes,66°11'.17N,018°57'.12W,518,R,"0250,0650,1050,1450,1850,2250",450,English,Operational
+I,Iceland,Reykjavik Radio/Grindavik,63°49'.99N,022°27'.04W,518,X,"0350,0750,1150,1550,1950,2350",450,English,Operational
+I,Ireland,Valentia,51°56'.00N,010°21'.00W,518,W,"0340,0740,1140,1540,1940,2340",400,English,Operational
+I,Ireland,Malin Head,55°21'.80N,007°20'.39W,518,Q,"0240,0640,1040,1440,1840,2240",400,English,Operational
+I,Netherlands,Netherlands Coastguard Radio (PBK),52°55'.06N,004°44'.34E,518,P,"0230,0630,1030,1430,1830,2230",250,English,Operational
+I,Norway,Rogaland Radio,58°38'.92N,005°36'.58E,518,L,"0150,0550,0950,1350,1750,2150",450,English,Operational
+I,Norway,Ørlandet,63°39'.70N,009°32'.80E,518,N,"0210,0610,1010,1410,1810,2210",450,English,Operational
+I,Norway,Jeloya,59°26'.08N,010°35'.48E,518,M,"0200,0600,1000,1400,1800,2200",200,English,Operational
+I,Sweden,Bjuröklubb,64°27'.71N,021°35'.47E,518,H,"0110,0510,0910,1310,1710,2110",300,English,Operational
+I,Sweden,Gislövshammar,55°29'.38N,014°18'.87E,518,J,"0130,0530,0930,1330,1730,2130",300,English,Operational
+I,Sweden,Grimeton,57°06'.32N,012°23'.36E,518,I,"0120,0520,0920,1320,1720,2120",300,English,Operational
+I,United Kingdom,Cullercoats,55°04'.49N,001°27'.79W,518,G,"0100,0500,0900,1300,1700,2100",300,English,Operational
+I,United Kingdom,Portpatrick,54°50'.64N,005°07'.47W,518,O,"0220,0620,1020,1420,1820,2220",300,English,Operational
+I,United Kingdom,Niton,50°35'.18N,001°15'.29W,518,E,"0040,0440,0840,1240,1640,2040",300,English,Operational
+I,United Kingdom,Niton (NE Coast of France and Channel Islands),50°35'.18N,001°15'.29W,518,K,"0140,0540,0940,1340,1740,2140",300,English,Operational; broadcast for France
+I,Faroes,Torshavn Radio,62°00'.87N,006°47'.45W,518,D,"0030,0430,0830,1230,1630,2030",300,English,Operational; Associate Member
+II,Cabo Verde,Sao Vicente Radio,16°51'.24N,025°00'.14W,518,U,"0320,0720,1120,1520,1920,2320",250,English,Non Operational
+II,France,Cross Corsen,48°28'.56N,005°03'.18W,518,A,"0000,0400,0800,1200,1600,2000",300,English,Operational
+II,Nigeria,Lagos,06°23'.99N,003°22'.91E,518,S,"0300,0700,1100,1500,1900,2300",250,English,Planned
+II,Nigeria,Oron,04°48'.01N,008°15'.34E,518,H,"0110,0510,0910,1310,1710,2110",250,English,Planned
+II,Portugal,CENCOMARACORES (S. Miguel),37°48'.50N,025°33'.20W,518,F,"0050,0450,0850,1250,1650,2050",300,English,Operational
+II,Portugal,CENCOMAR (Penalva),38°36'.20N,009°01'.80W,518,R,"0250,0650,1050,1450,1850,2250",300,English,Operational
+II,Portugal,CENCOMARMADEIRA (Porto Santo),33°05'.70N,016°20'.40W,518,P,"0230,0630,1030,1430,1830,2230",300,English,Operational
+II,Senegal,Dakar,14°46'.25N,017°20'.40W,518,C,"0020,0420,0820,1220,1620,2020",200,English,Non Operational
+II,Spain,Coruña,43°22'.03N,008°27'.13W,518,D,"0030,0430,0830,1230,1630,2030",300,English,Operational
+II,Spain,Tarifa,36°02'.53N,005°33'.38W,518,G,"0100,0500,0900,1300,1700,2100",300,English,Operational
+II,Spain,Las Palmas,28°25'.97N,016°20'.17W,518,I,"0120,0520,0920,1320,1720,2120",450,English,Operational
+III,Algeria,Ain Taya Radio,36°48'.23N,003°15'.63E,518,B,"0010,0410,0810,1210,1610,2010",200,English,Operational
+III,Azerbaijan,Baku (Chilov),40°19'.63N,050°36'.73E,518,R,"0250,0650,1050,1450,1850,2250",200,English,Operational
+III,Bulgaria,Varna Radio,43°04'.01N,027°47'.19E,518,J,"0130,0530,0930,1330,1730,2130",350,English,Operational; also broadcast for Romania
+III,Croatia,Split (Hvar Is),43°10'.54N,016°25'.38E,518,Q,"0240,0640,1040,1440,1840,2240",200,English,Operational
+III,Cyprus,Cyprus Radio,34°44'.28N,032°39'.52E,518,M,"0200,0600,1000,1400,1800,2200",200,English,Operational
+III,Egypt,Alexandria,31°12'.00N,029°52'.00E,518,N,"0210,0610,1010,1410,1810,2210",350,English,Operational
+III,France,CROSS La Garde,43°06'.26N,005°59'.49E,518,W,"0340,0740,1340,1540,1940,2340",250,English,Operational
+III,Greece,Irakleio,35°19'.33N,025°44'.92E,518,H,"0110,0510,0910,1310,1710,2110",400,English,Operational
+III,Greece,Kerkyra,39°36'.43N,019°53'.47E,518,K,"0140,0540,0940,1340,1740,2140",400,English,Operational
+III,Greece,Limnos,39°54'.41N,025°10'.84E,518,L,"0150,0550,0950,1350,1750,2150",400,English,Operational
+III,Iran (Islamic Republic of),Fereydoonkenar Radio,36°42'.00N,052°33'.00E,518,G,"0100,0500,0900,1300,1700,2100",250,English,Operational
+III,Israel,RCC Haifa,32°54'.90N,035°07'.10E,518,P,"0230,0630,1030,1430,1830,2230",200,English,Operational
+III,Italy,La Maddalena,41°13'.22N,009°23'.57E,518,R,"0250,0650,1050,1450,1850,2250",320,English,Operational
+III,Italy,Mondolfo,43°44'.51N,013°08'.33E,518,U,"0320,0720,1120,1520,1920,2320",320,English,Operational
+III,Italy,Sellia Marina,38°52'.21N,016°43'.06E,518,V,"0330,0730,1130,1530,1930,2330",320,English,Operational
+III,Libya,Surt,N.I.,N.I.,518,S,"0300,0700,1100,1500,1900,2300",320,English,Planned
+III,Malta,Malta Radio,35°50'.29N,014°29'.38E,518,O,"0220,0620,1020,1420,1820,2220",400,English,Operational
+III,Malta,Malta Radio,35°50'.29N,014°29'.38E,518,T,"0310,0710,1110,1510,1910,2310",400,English,Operational; temporary arrangement using Tunisian slot T
+III,Russian Federation,Novorossiysk,44°36'.00N,037°58'.00E,518,A,"0000,0400,0800,1200,1800,2000",300,English,Operational
+III,Russian Federation,Astrakhan,45°47'.00N,047°33'.00E,518,W,"0340,0740,1140,1540,1940,2340",250,English,Operational
+III,Spain,Cabo La Nao,38°43'.07N,000°10'.55E,518,X,"0350,0750,1150,1550,1950,2350",220,English,Operational
+III,Spain,Tarifa,36°02'.53N,005°33'.38W,518,G,"0100,0500,0900,1300,1700,2100",300,English,Operational
+III,Tunisia,Kelibia,36°48'.08N,011°02'.29E,518,T,"0310,0710,1110,1510,1910,2310",270,English,Non Operational
+III,Turkey,Istanbul,41°04'.00N,028°57'.00E,518,D,"0030,0430,0830,1230,1630,2030",400,English,Operational
+III,Turkey,Samsun,41°23'.00N,036°11'.00E,518,E,"0040,0440,0840,1240,1640,2040",400,English,Operational
+III,Turkey,Antalya,36°09'.00N,032°26'.00E,518,F,"0050,0450,0850,1250,1650,2050",400,English,Operational
+III,Turkey,Izmir,38°16'.00N,026°16'.00E,518,I,"0120,0520,0920,1320,1720,2120",400,English,Operational
+III,Ukraine,Odessa,46°22'.65N,030°44'.85E,518,C,"0020,0420,0820,1220,1620,2020",250,English,Operational
+III,Ukraine,Berdyansk,46°38'.17N,036°45'.72E,518,G,"0100,0500,0900,1300,1700,2100",250,English,Operational
+I,Belgium,Oostende Radio,51°10'.95N,002°48'.47E,490,B,"0010,0410,0810,1210,1610,2010",55,Dutch,Operational
+I,Germany,Pinneberg,53°40'.50N,009°48'.50E,490,L,"0150,0550,0950,1350,1750,2150",250,German,Operational
+I,Iceland,Reykjavik Radio/Grindavik,63°49'.99N,022°27'.04W,490,K,"0140,0540,0940,1340,1740,2140",450,Icelandic,Operational
+I,Iceland,Reykjavik Radio/Saudanes,66°11'.17N,018°57'.12W,490,E,"0040,0440,0840,1240,1640,2040",450,Icelandic,Operational
+I,Ireland,Malin Head (North West Approaches),55°21'.80N,007°20'.39W,490,A,"0000,0400,0800,1200,1600,2000",400,English,Operational; broadcast for U.K.
+I,United Kingdom,Cullercoats,55°04'.49N,001°27'.79W,490,U,"0320,0720,1120,1520,1920,2320",300,English,Operational
+I,United Kingdom,Portpatrick,54°50'.64N,005°07'.47W,490,C,"0020,0420,0820,1220,1620,2020",300,English,Operational
+I,United Kingdom,Niton,50°35'.18N,001°15'.29W,490,I,"0120,0520,0920,1320,1720,2120",300,English,Operational
+I,United Kingdom,Niton (NE Coast of France and Channel Islands),50°35'.18N,001°15'.29W,490,T,"0310,0710,1110,1510,1910,2310",300,French,Operational; broadcast for France
+II,Cabo Verde,Sao Vicente Radio,16°51'.24N,025°00'.14W,490,P,"0230,0630,1030,1430,1830,2230",250,Portuguese,Non Operational
+II,France,Ouessant,48°28'.56N,005°03'.18W,490,E,"0040,0440,0840,1240,1640,2040",300,French,Operational
+II,Nigeria,Lagos,06°23'.99N,003°22'.91E,490,L,"0150,0550,0950,1350,1750,2150",250,N.I.,Non Operational
+II,Nigeria,Oron,04°48'.01N,008°15'.34E,490,O,"0220,0620,1020,1420,1820,2220",250,N.I.,Non Operational
+II,Portugal,CENCOMARACORES (S. Miguel),37°48'.50N,025°33'.20W,490,J,"0130,0530,0930,1330,1730,2130",300,Portuguese,Operational
+II,Portugal,CENCOMAR (Penalva),38°36'.20N,009°01'.80W,490,G,"0100,0500,0900,1300,1700,2100",300,Portuguese,Operational
+II,Portugal,CENCOMARMADEIRA (Porto Santo),33°05'.70N,016°20'.40W,490,M,"0200,0600,1000,1400,1800,2200",300,Portuguese,Operational
+II,Senegal,Dakar,14°46'.25N,017°20'.40W,490,M,"0200,0600,1000,1400,1800,2200",200,French,Non Operational
+II,Spain,Coruña,43°22'.03N,008°27'.13W,490,W,"0340,0740,1140,1540,1940,2340",300,Spanish,Operational
+II,Spain,Tarifa,36°02'.53N,005°33'.38W,490,T,"0310,0710,1110,1510,1910,2310",300,Spanish,Operational
+II,Spain,Las Palmas,28°25'.97N,016°20'.17W,490,A,"0000,0400,0800,1200,1600,2000",450,Spanish,Operational
+III,Algeria,Ain Taya Radio,36°48'.23N,003°15'.63E,490,K,"0140,0540,0940,1340,1740,2140",200,French,Operational
+III,Azerbaijan,Baku (Chilov),40°19'.63N,050°36'.73E,490,M,"0200,0600,1000,1400,1800,2200",200,Azerbaijani,Operational
+III,France,CROSS La Garde,43°06'.26N,005°59'.49E,490,S,"0300,0700,1100,1500,1900,2300",250,French,Operational
+III,Georgia,Poti,42°07'.97N,041°39'.66E,490,G,"0100,0500,0900,1300,1700,2100",350,English,Operational
+III,Greece,Irakleio,35°19'.33N,025°44'.92E,490,Q,"0240,0640,1040,1440,1840,2240",400,Greek,Operational
+III,Greece,Kerkyra,39°36'.43N,019°53'.47E,490,P,"0230,0630,1030,1430,1830,2230",400,Greek,Operational
+III,Greece,Limnos,39°54'.41N,025°10'.84E,490,R,"0250,0650,1050,1450,1850,2250",400,Greek,Operational
+III,Iran (Islamic Republic of),Fereydoonkenar Radio,36°42'.00N,052°33'.00E,490,J,"0130,0530,0930,1330,1730,2130",250,Farsi,Operational
+III,Italy,La Maddalena,41°13'.22N,009°23'.57E,490,I,"0120,0520,0920,1320,1720,2120",320,Italian,Operational
+III,Italy,Mondolfo,43°44'.51N,013°08'.33E,490,E,"0040,0440,0840,1240,1640,2040",320,Italian,Operational
+III,Italy,Sellia Marina,38°52'.21N,016°43'.06E,490,W,"0340,0740,1140,1540,1940,2340",320,Italian,Operational
+III,Italy,Piombino,42°55'.36N,010°32'.45E,490,N,"0210,0610,1010,1410,1810,2210",320,English,Operational
+III,Romania,Constanta Radio,44°06'.00N,028°38'.00E,490,L,"0150,0550,0950,1350,1750,2150",400,Romanian,Operational
+III,Spain,Cabo La Nao,38°43'.07N,000°10'.55E,490,M,"0200,0600,1000,1400,1800,2200",220,Spanish,Operational
+III,Spain,Tarifa,36°02'.53N,005°33'.38W,490,T,"0310,0710,1110,1510,1910,2310",300,Spanish,Operational
+III,Syrian Arab Republic,Lattakia Radio,35°32'.13N,035°46'.50E,490,K,"0140,0540,0940,1340,1740,2140",N.I.,N.I.,Operational
+III,Turkey,Samsun,41°23'.00N,036°11'.00E,490,A,"0000,0400,0800,1200,1600,2000",400,Turkish,Operational
+III,Turkey,Istanbul,41°04'.00N,028°57'.00E,490,B,"0010,0410,0810,1210,1610,2010",400,Turkish,Operational
+III,Turkey,Izmir,38°16'.00N,026°16'.00E,490,C,"0020,0420,0820,1220,1620,2020",400,Turkish,Operational
+III,Turkey,Antalya,36°09'.00N,032°26'.00E,490,D,"0030,0430,0830,1230,1630,2030",400,Turkish,Operational
+III,Ukraine,Odessa,46°22'.65N,030°44'.85E,490,X,"0350,0750,1150,1550,1950,2350",250,English,Operational
+III,Ukraine,Berdyansk,46°38'.17N,036°45'.72E,490,U,"0320,0720,1120,1520,1920,2320",250,English,Operational
+IV,Bermuda (U.K.),Bermuda,32°21'.07N,064°39'.46W,518,B,"0010,0410,0810,1210,1610,2010",280,English,Operational
+IV,Canada,Moisie,50°11'.75N,066°06'.74W,518,C,"0020,0420,0820,1220,1620,2020",300,English,Operational
+IV,Canada,Ferndale,44°56'.22N,081°14'.00W,518,H,"0110,0510,0910,1310,1710,2110",300,English,Operational
+IV,Canada,Pass Lake,48°33'.80N,088°39'.37W,518,P,"0230,0630,1030,1430,1830,2230",300,English,Operational
+IV,Canada,Port Caledonia,46°11'.15N,059°53'.77W,518,Q,"0240,0640,1040,1440,1840,2240",300,English,Operational
+IV,Canada,Chebogue,43°44'.65N,066°07'.32W,518,U,"0320,0720,1120,1520,1920,2320",300,English,Operational
+IV,Canada,Robin Hood Bay,47°36'.65N,052°40'.18W,518,O,"0220,0620,1020,1420,1820,2220",300,English,Operational
+IV,Canada,Cartwright,53°42'.52N,057°01'.35W,518,X,"0350,0750,1150,1550,1950,2350",300,English,Operational
+IV,Canada,Iqaluit,63°43'.82N,068°32'.70W,518,T,"0310,0710,1110,1510,1910,2310",300,English,Operational
+IV,Colombia,Santa Marta,11°03'.33N,074°13'.10W,518,C,"0020,0420,0820,1220,1620,2020",300,English,Under trial
+IV,Curaçao (Netherlands),Curaçao,12°10'.31N,068°51'.82W,518,H,"0110,0510,0910,1310,1710,2110",400,English,Operational
+IV,Greenland (Denmark),Kook Island (Nuuk),64°04'.00N,052°01'.00W,518,W,"0340,0740,1140,1540,1940,2340",300,English,Operational
+IV,Greenland (Denmark),Simiutaq,60°41'.00N,046°35'.00W,518,M,"0200,0600,1000,1400,1800,2200",300,English,Operational
+IV,United States,Miami,25°37'.40N,080°23'.37W,518,A,"0000,0400,0800,1200,1600,2000",240,English,Operational
+IV,United States,Boston,41°42'.82N,070°30'.27W,518,F,"0050,0450,0850,1250,1650,2050",200,English,Operational
+IV,United States,New Orleans,29°53'.08N,089°56'.73W,518,G,"0100,0500,0900,1300,1700,2100",200,English,Operational
+IV,United States,Portsmouth,36°43'.72N,076°00'.60W,518,N,"0210,0610,1010,1410,1810,2210",280,English,Operational
+IV,United States,Isabella,18°28'.00N,067°04'.32W,518,R,"0250,0650,1050,1450,1850,2250",200,English,Operational
+IV,United States,Charleston,32°50'.67N,079°57'.00W,518,E,"0040,0440,0840,1240,1640,2040",200,English,Operational
+VI,Argentina,Ushuaia,54°48'.00S,068°18'.00W,518,M,"0200,0600,1000,1400,1800,2200",280,English,Operational
+VI,Argentina,Rio Gallegos,51°37'.00S,069°12'.00W,518,N,"0210,0610,1010,1410,1810,2210",280,English,Operational
+VI,Argentina,Comodoro Rivadavia,45°50'.50S,067°28'.40W,518,O,"0220,0620,1020,1420,1820,2220",280,English,Operational
+VI,Argentina,Bahia Blanca,38°52'.00S,062°06'.00W,518,P,"0230,0630,1030,1430,1830,2230",280,English,Operational
+VI,Argentina,Mar del Plata,38°03'.00S,057°32'.00W,518,Q,"0240,0640,1040,1440,1840,2240",280,English,Operational
+VI,Argentina,Buenos Aires,35°29'.00S,057°10'.00W,518,R,"0250,0650,1050,1450,1850,2250",280,English,Operational
+VI,Uruguay,La Paloma,34°40'.00S,054°09'.00W,518,F,"0050,0450,0850,1250,1650,2050",280,English,Non Operational
+VII,Namibia,Walvis Bay,23°03'.00S,014°37'.00E,518,B,"0010,0410,0810,1210,1610,2010",378,English,Non Operational
+VII,South Africa,Cape Town Radio,33°40'.97S,018°43'.09E,518,C,"0020,0420,0820,1220,1620,2020",300,English,Operational
+VII,South Africa,Port Elizabeth Radio,34°02'.20S,025°33'.37E,518,I,"0120,0520,0920,1320,1720,2120",300,English,Operational
+VII,South Africa,Durban Radio,29°48'.35S,030°48'.95E,518,O,"0220,0620,1020,1420,1820,2220",300,English,Operational
+VII,South Africa,Cape Columbine,32°49'.55S,017°50'.97E,518,U,"0320,0720,1120,1520,1920,2320",300,English,Planned
+VIII,India,Mumbai,19°05'.00N,072°50'.00E,518,G,"0100,0500,0900,1300,1700,2100",250,English,Non Operational
+VIII,India,Chennai,13°08'.00N,080°10'.00E,518,P,"0230,0630,1030,1430,1830,2230",250,English,Non Operational
+VIII,India,Veraval,20°54'.60N,070°23'.00E,518,H,"0110,0510,0910,1310,1710,2110",250,English,Under trial
+VIII,India,Vengurla Point,15°51'.20N,073°37'.00E,518,J,"0130,0530,0930,1330,1730,2130",250,English,Under trial
+VIII,India,Muttam Point,08°07'.40N,077°19'.10E,518,L,"0150,0550,0950,1350,1750,2150",250,English,Under trial
+VIII,India,Porto Novo,11°30'.20N,079°46'.20E,518,O,"0220,0620,1020,1420,1820,2220",250,English,Under trial
+VIII,India,Vakalpudi,17°00'.80N,082°17'.10E,518,Q,"0240,0640,1040,1440,1840,2240",250,English,Under trial
+VIII,India,Balasore,21°29'.20N,086°55'.00E,518,S,"0300,0700,1100,1500,1900,2300",250,English,Under trial
+VIII,India,Keating Point (Andaman and Nicobar Islands),09°15'.40N,092°46'.50E,518,V,"0330,0730,1130,1530,1930,2330",250,English,Under trial
+VIII,Mauritius,Mauritius,20°10'.05S,057°28'.69E,518,C,"0020,0420,0820,1220,1620,2020",400,English,Operational
+VIII,Seychelles,Mahe,04°39'.32S,055°28'.38E,518,T,"0310,0710,1110,1510,1910,2310",400,English,Operational
+IX,Bahrain,Hamala,26°09'.53N,050°28'.35E,518,B,"0010,0410,0810,1210,1610,2010",300,English,Operational
+IX,Egypt,Serapeum (Ismailia),30°28'.00N,032°22'.00E,518,X,"0350,0750,1150,1550,1950,2350",400,English,Operational
+IX,Egypt,Kosseir,26°06'.00N,034°17'.00E,518,V,"0330,0730,1130,1530,1930,2330",400,English,Operational
+IX,Iran (Islamic Republic of),Abbas Radio,27°06'.00N,056°03'.00E,518,F,"0050,0450,0850,1250,1650,2050",300,English,Operational
+IX,Iran (Islamic Republic of),Bushehr Radio,28°59'.00N,050°49'.00E,518,A,"0000,0400,0800,1200,1600,2000",300,English,Operational
+IX,Oman,Wattayah,23°36'.77N,058°30'.26E,518,M,"0200,0600,1000,1400,1800,2200",400,English,Non Operational
+IX,Oman,Salalah,17°01'.90N,054°15'.67E,518,D,"0030,0430,0830,1230,1630,2030",400,English,Planned
+IX,Pakistan,Karachi,24°52'.77N,067°09'.94E,518,P,"0230,0630,1030,1430,1830,2230",400,English,Non Operational
+IX,Saudi Arabia,Jeddah,21°23'.00N,039°10'.00E,518,H,"0110,0510,0910,1310,1710,2110",390,English,Non Operational
+XI,China,Sanya,18°17'.49N,109°21'.80E,518,M,"0200,0600,1000,1400,1800,2200",250,English,Operational
+XI,China,Guangzhou,23°09'.56N,113°30'.80E,518,N,"0210,0610,1010,1410,1810,2210",250,English,Operational
+XI,China,Fuzhou,25°59'.96N,119°26'.50E,518,O,"0220,0620,1020,1420,1820,2220",250,English,Operational
+XI,China,Shanghai,31°06'.79N,121°32'.79E,518,Q,"0240,0640,1040,1440,1840,2240",250,English,Operational
+XI,China,Dalian,38°50'.69N,121°31'.09E,518,R,"0250,0650,1050,1450,1850,2250",250,English,Operational
+XI,Democratic People's Republic of Korea,Pyongyang,38°59'.58N,125°42'.93E,518,D,"0030,0430,0830,1230,1630,2030",200,English,Operational
+XI,Democratic People's Republic of Korea,Hamhung,39°50'.00N,127°41'.02E,518,E,"0040,0440,0840,1240,1640,2040",200,English,Operational
+XI,Indonesia,Jayapura,02°31'.13S,140°43'.30E,518,A,"0000,0400,0800,1200,1600,2000",300,English,Operational
+XI,Indonesia,Ambon,03°41'.68S,128°11'.88E,518,B,"0010,0410,0810,1210,1610,2010",300,English,Operational
+XI,Indonesia,Makassar,05°04'.89S,119°29'.83E,518,D,"0030,0430,0830,1230,1630,2030",300,English,Operational
+XI,Indonesia,Jakarta,06°07'.15S,106°51'.78E,518,E,"0040,0440,0840,1240,1640,2040",300,English,Operational
+XI,Japan,Kushiro,42°57'.35N,144°35'.37E,518,K,"0140,0540,0940,1340,1740,2140",400,English,Operational
+XI,Japan,Otaru,43°19'.53N,140°26'.83E,518,J,"0130,0530,0930,1330,1730,2130",400,English,Operational
+XI,Japan,Yokohama,35°14'.55N,139°55'.28E,518,I,"0120,0520,0920,1320,1720,2120",400,English,Operational
+XI,Japan,Moji,34°00'.90N,130°56'.10E,518,H,"0110,0510,0910,1310,1710,2110",400,English,Operational
+XI,Japan,Naha,26°05'.47N,127°40'.12E,518,G,"0100,0500,0900,1300,1700,2100",400,English,Operational
+XI,Malaysia,Penang,05°25'.58N,100°24'.40E,518,U,"0320,0720,1120,1520,1920,2320",350,English,Operational
+XI,Malaysia,Miri,04°26'.42N,114°01'.51E,518,T,"0310,0710,1110,1510,1910,2310",350,English,Operational
+XI,Malaysia,Sandakan,05°53'.85N,118°00'.24E,518,S,"0300,0700,1100,1500,1900,2300",350,English,Operational
+XI,Philippines,Manila,14°33'.33N,121°03'.90E,518,J,"0130,0530,0930,1330,1730,2130",320,English,Non Operational
+XI,Philippines,Davao,07°07'.30N,125°39'.42E,518,R,"0250,0650,1050,1450,1850,2250",320,English,Planned
+XI,Republic of Korea,Jukbyeon,37°03'.45N,129°25'.70E,518,V,"0330,0730,1130,1530,1930,2330",200,English,Operational
+XI,Republic of Korea,Byeonsan,35°35'.82N,126°29'.18E,518,W,"0340,0740,1140,1540,1940,2340",200,English,Operational
+XI,Singapore,Singapore POCC,01°20'.65N,103°58'.35E,518,C,"0020,0420,0820,1220,1620,2020",400,English,Operational
+XI,Thailand,Bangkok Radio,13°01'.47N,100°01'.20E,518,F,"0050,0450,0850,1250,1650,2050",400,English,Operational
+XI,United States,Guam,13°28'.62N,144°50'.10E,518,V,"0330,0730,1130,1530,1930,2330",250,English,Operational
+XI,Viet Nam,Ho Chi Minh Radio,10°23'.40N,107°08'.41E,518,X,"0350,0750,1150,1550,1950,2350",400,English,Operational
+XI,Viet Nam,Da Nang Radio,16°03'.33N,108°09'.42E,518,K,"0140,0540,0940,1340,1740,2140",400,English,Operational
+XI,"Hong Kong, China",Hong Kong,22°12'.57N,114°15'.30E,518,L,"0150,0550,0950,1350,1750,2150",400,English,Operational; Associate Member
+XII,Canada,Digby Island,54°18'.05N,130°24'.17W,518,D,"0030,0430,0830,1230,1630,2030",300,English,Operational
+XII,Canada,Amphitrite Point,48°55'.28N,125°32'.38W,518,H,"0110,0510,0910,1310,1710,2110",300,English,Operational
+XII,Colombia,Punta Soldado,03°48'.57N,077°10'.82W,518,O,"0220,0620,1020,1420,1820,2220",300,English,Planned
+XII,Ecuador,Ayora,00°43'.03S,090°19'.63W,518,L,"0150,0550,0950,1350,1750,2150",400,English,Non Operational
+XII,United States,San Francisco,37°55'.53N,122°43'.87W,518,C,"0020,0420,0820,1220,1620,2020",350,English,Operational
+XII,United States,Kodiak,57°46'.63N,152°31'.72W,518,J,"0130,0530,0930,1330,1730,2130",200,English,Operational
+XII,United States,Kodiak,57°46'.63N,152°31'.72W,518,X,"0350,0750,1150,1550,1950,2350",200,English,Operational
+XII,United States,Honolulu,21°26'.10N,158°08'.65W,518,O,"0220,0620,1020,1420,1820,2220",350,English,Operational
+XII,United States,Cambria,35°31'.12N,121°03'.60W,518,Q,"0240,0640,1040,1440,1840,2240",350,English,Operational
+XII,United States,Astoria,46°12'.40N,123°57'.38W,518,W,"0340,0740,1140,1540,1940,2340",216,English,Operational
+XIII,Russian Federation,Kholmsk,47°02'.00N,142°03'.00E,518,B,"0010,0410,0810,1210,1610,2010",300,English,Operational
+XIII,Russian Federation,Petropavlovsk-Kamchatskiy,53°00'.00N,158°40'.00E,518,C,"0020,0420,0820,1220,1620,2020",300,English,Operational
+XIII,Russian Federation,Vladivostok,43°23'.00N,131°54'.00E,518,A,"0000,0400,0800,1200,1600,2000",230,English,Operational
+XIII,Russian Federation,Okhotsk,59°22'.00N,143°12'.00E,518,G,"0100,0500,0900,1300,1700,2100",300,English,Operational
+XIII,Russian Federation,Magadan,59°41'.00N,150°09'.00E,518,D,"0030,0430,0830,1230,1630,2030",120,English,Operational
+XV,Chile,Antofagasta,23°29'.47S,070°25'.39W,518,A,"0000,0400,0800,1200,1600,2000",400,English,Operational
+XV,Chile,Valparaiso,32°48'.37S,071°29'.23W,518,B,"0010,0410,0810,1210,1610,2010",400,English,Operational
+XV,Chile,Talcahuano,36°37'.75S,073°07'.01W,518,C,"0020,0420,0820,1220,1620,2020",400,English,Operational
+XV,Chile,Puerto Montt,41°47'.06S,073°52'.75W,518,D,"0030,0430,0830,1230,1630,2030",400,English,Operational
+XV,Chile,Magallanes,52°55'.70S,070°53'.42W,518,E,"0040,0440,0840,1240,1640,2040",400,English,Operational
+XV,Chile,Isla de Pascua,27°08'.85S,109°22'.61W,518,F,"0050,0450,0850,1250,1650,2050",400,English,Non Operational
+XVI,Peru,Paita,05°06'.00S,081°07'.00W,518,S,"0300,0700,1100,1500,1900,2300",250,English,Operational
+XVI,Peru,Callao,12°01'.80S,077°07'.80W,518,U,"0320,0720,1120,1520,1920,2320",250,English,Operational
+XVI,Peru,Mollendo,17°00'.30S,072°01'.90W,518,W,"0340,0740,1140,1540,1940,2340",250,English,Operational
+XVIII,Greenland (Denmark),Upernavik,72°47'.00N,056°09'.00W,518,I,"0120,0520,0920,1320,1720,2120",300,English,Operational
+XIX,Norway,Bodø Radio,67°16'.15N,014°25'.37E,518,B,"0010,0410,0810,1210,1610,2010",450,English,Operational
+XIX,Norway,Vardø Radio,70°22'.27N,031°05'.83E,518,C,"0020,0420,0820,1220,1620,2020",450,English,Operational
+XIX,Norway,Svalbard (Isfjord),78°03'.42N,013°36'.59E,518,A,"0000,0400,0800,1200,1600,2000",450,English,Operational
+XX,Russian Federation,Murmansk,68°46'.00N,032°58'.00E,518,K,"0140,0540,0940,1340,1740,2140",300,English,Operational
+XX,Russian Federation,Arkhangelsk,64°51'.00N,040°17'.00E,518,L,"0150,0550,0950,1350,1750,2150",300,English,Operational
+XXI,Russian Federation,Tiksi,71°38'.00N,128°50'.00E,518,Q,"0240,0640,1040,1440,1840,2240",300,English,Operational (period from 1 July to 30 October)
+IV,Canada,Moisie,50°11'.75N,066°06'.73W,490,D,"0030,0430,0830,1230,1630,2030",300,French,Operational
+IV,Canada,Port Caledonia,46°11'.15N,059°53'.77W,490,J,"0130,0530,0930,1330,1730,2130",300,French,Operational
+IV,Canada,Chebogue,43°44'.65N,066°07'.32W,490,V,"0330,0730,1130,1530,1930,2330",300,French,Operational
+IV,Canada,Iqaluit,63°43'.82N,068°32'.70W,490,S,"0300,0700,1100,1500,1900,2300",300,French,Operational
+IV,Colombia,Santa Marta,11°03'.33N,074°13'.10W,490,K,"0140,0540,0940,1340,1740,2140",300,Spanish,Planned
+VI,Argentina,Ushuaia,54°48'.00S,068°18'.00W,490,A,"0000,0400,0800,1200,1600,2000",280,Spanish,Operational
+VI,Argentina,Rio Gallegos,51°37'.00S,069°12'.00W,490,B,"0010,0410,0810,1210,1610,2010",280,Spanish,Operational
+VI,Argentina,Comodoro Rivadavia,45°50'.50S,067°28'.40W,490,C,"0020,0420,0820,1220,1620,2020",280,Spanish,Operational
+VI,Argentina,Bahia Blanca,38°52'.00S,062°06'.00W,490,D,"0030,0430,0830,1230,1630,2030",280,Spanish,Operational
+VI,Argentina,Mar del Plata,38°03'.00S,057°32'.00W,490,E,"0040,0440,0840,1240,1640,2040",280,Spanish,Operational
+VI,Argentina,Buenos Aires,35°29'.00S,057°10'.00W,490,F,"0050,0450,0850,1250,1650,2050",280,Spanish,Operational
+VI,Uruguay,La Paloma,34°40'.00S,054°09'.00W,490,A,"0000,0400,0800,1200,1600,2000",280,Spanish,Non Operational
+VIII,India,Veraval,20°54'.60N,070°23'.00E,490,P,"0230,0630,1030,1430,1830,2230",250,N.I.,Planned
+VIII,India,Vengurla Point,15°51'.20N,073°37'.00E,490,R,"0250,0650,1050,1450,1850,2250",250,N.I.,Planned
+VIII,India,Muttam Point,08°07'.40N,077°19'.10E,490,T,"0310,0710,1110,1510,1910,2310",250,N.I.,Planned
+VIII,India,Porto Novo,11°30'.20N,079°46'.20E,490,E,"0040,0440,0840,1240,1640,2040",250,N.I.,Planned
+VIII,India,Vakalpudi,17°00'.80N,082°17'.10E,490,G,"0100,0500,0900,1300,1700,2100",250,N.I.,Planned
+VIII,India,Balasore,21°29'.20N,086°55'.00E,490,I,"0120,0520,0920,1320,1720,2120",250,N.I.,Planned
+VIII,India,Keating Point (Andaman and Nicobar Islands),09°15'.40N,092°46'.50E,490,K,"0140,0540,0940,1340,1740,2140",250,N.I.,Planned
+VIII,Seychelles,Mahe,04°39'.32S,055°28'.38E,490,M,"0200,0600,1000,1400,1800,2200",400,Creole,Operational
+IX,Iran (Islamic Republic of),Abbas Radio,27°06'.00N,056°03'.00E,490,I,"0120,0520,0920,1320,1720,2120",300,Farsi,Operational
+IX,Iran (Islamic Republic of),Bushehr Radio,28°59'.00N,050°49'.00E,490,D,"0030,0430,0830,1230,1630,2030",300,Farsi,Operational
+IX,Oman,Wattayah,23°36'.77N,058°30'.26E,490,F,"0050,0450,0850,1250,1650,2050",400,Arabic,Planned
+IX,Oman,Salalah,17°01'.90N,054°15'.67E,490,V,"0330,0730,1130,1530,1930,2330",400,Arabic,Planned
+XI,China,Sanya,18°17'.49N,109°21'.80E,490,A,"0000,0400,0800,1200,1600,2000",250,Chinese,Under trial
+XI,China,Zhanjiang,21°09'.58N,110°21'.82E,490,D,"0030,0430,0830,1230,1630,2030",250,Chinese,Under trial
+XI,China,Guangzhou,23°09'.56N,113°30'.80E,490,B,"0010,0410,0810,1210,1610,2010",250,Chinese,Under trial
+XI,China,Fuzhou,25°59'.96N,119°26'.50E,490,C,"0020,0420,0820,1220,1620,2020",250,Chinese,Under trial
+XI,China,Shanghai,31°06'.79N,121°32'.79E,490,E,"0040,0440,0840,1240,1640,2040",250,Chinese,Under trial
+XI,China,Tianjin,39°02'.39N,117°26'.95E,490,S,"0300,0700,1100,1500,1900,2300",250,Chinese,Under trial
+XI,China,Dalian,38°50'.69N,121°31'.09E,490,F,"0050,0450,0850,1250,1650,2050",250,Chinese,Under trial
+XI,Democratic People's Republic of Korea,Pyongyang,38°59'.58N,125°42'.93E,490,A,"0000,0400,0800,1200,1600,2000",200,Korean,Operational
+XI,Democratic People's Republic of Korea,Hamhung,39°50'.00N,127°41'.02E,490,B,"0010,0410,0810,1210,1610,2010",200,Korean,Operational
+XI,Philippines,Puerto Princesa,09°44'.36N,118°44'.00E,490,I,"0120,0530,0930,1320,1720,2120",320,Tagalog/English,Planned
+XI,Republic of Korea,Jukbyeon,37°03'.45N,129°25'.70E,490,J,"0130,0530,0930,1330,1730,2130",200,Korean,Operational
+XI,Republic of Korea,Byeonsan,35°35'.82N,126°29'.18E,490,K,"0140,0540,0940,1340,1740,2140",200,Korean,Operational
+XI,Viet Nam,Da Nang Radio,16°03'.33N,108°09'.42E,490,F,"0050,0450,0850,1250,1650,2050",400,Vietnamese,Operational
+XI,Viet Nam,Vung Tau Radio,10°23'.40N,107°08'.41E,490,V,"0330,0730,1130,1530,1930,2330",400,Vietnamese,Operational
+XII,Colombia,Punta Soldado,03°48'.57N,077°10'.82W,490,C,"0020,0420,0820,1220,1620,2020",300,Spanish,Planned
+XII,Ecuador,Ayora,00°43'.03S,090°19'.63W,490,A,"0000,0400,0800,1200,1600,2000",400,Spanish,Non Operational
+XV,Chile,Antofagasta,23°29'.47S,070°25'.39W,490,G,"0100,0500,0900,1300,1700,2100",400,Spanish,Operational
+XV,Chile,Valparaiso,32°48'.37S,071°29'.23W,490,H,"0110,0510,0910,1310,1710,2110",400,Spanish,Operational
+XV,Chile,Talcahuano,36°37'.75S,073°07'.01W,490,I,"0120,0520,0920,1320,1720,2120",400,Spanish,Operational
+XV,Chile,Puerto Montt,41°47'.06S,073°52'.75W,490,J,"0130,0530,0930,1330,1730,2130",400,Spanish,Operational
+XV,Chile,Magallanes,52°55'.70S,070°53'.42W,490,K,"0140,0540,0940,1340,1740,2140",400,Spanish,Operational
+XV,Chile,Isla de Pascua,27°08'.85S,109°22'.61W,490,L,"0150,0550,0950,1350,1750,2150",400,Spanish,Non Operational

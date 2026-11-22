@@ -194,7 +194,29 @@ Sirve con antenas que cubren las tres frecuencias, como la JRC NAW-333 (518, 490
 
 Probado con una recepción real colocada en el canal de onda corta: se descodifica y se guarda como 4209,5 kHz, y lo que cae en el otro canal se ignora. **Sin probar con una emisión real en 4209,5 kHz.**
 
+### Fase 7 · dos receptores, horario, estaciones del mundo y aspecto
+
+**Dos receptores, ajustados desde la web.** Los servicios pasan a ser `navtex-receiver@1` y `navtex-receiver@2`. En la pestaña «Receptores» se elige para cada uno si está encendido, qué equipo usa (SDRplay o RTL-SDR), su toma de antena o su número de serie, y la banda. El receptor aplica los cambios en unos segundos, sin reiniciar el servicio ni tocar archivos. Con dos equipos se reciben las tres frecuencias a la vez.
+
+- El receptor 2 está siempre en marcha pero no toca ningún equipo hasta que se enciende en la web.
+- Si el receptor 1 comparte el SDRplay con SDRconnect o SDR++, sigue alternando con ellos (`sudo systemctl start navtex-receiver@1`).
+- Si un equipo está desconectado o en uso, el receptor lo dice y lo reintenta cada 15 segundos.
+- A mano sigue valiendo la línea de órdenes; `navtexreceiver -n 1` usa los ajustes de la web.
+
+**Banda por horario.** Con un solo equipo, la banda «Por horario» escucha 518 y 490 kHz y pasa a 4209,5 kHz en las horas UTC que se indiquen, desde un minuto antes hasta once después. Un botón toma las horas de las estaciones de onda corta que se siguen.
+
+**Estaciones del mundo.** `web_server/build/estaciones.json` trae 263 estaciones con su letra, posición, horas, alcance, idioma y estado. Indicando la posición propia (latitud y longitud, o un localizador), la pestaña «Estaciones» las ordena por distancia, marca las que quedan en alcance, permite seguirlas con un toque y enseña las próximas emisiones de las que se siguen.
+
+- Fuentes: la Tabla 4 de la UIT, «Coast stations participating in the NAVTEX services» (518 y 490 kHz; coordinada con la OMI, GMDSS.1/Circ.21, 31-05-2017), y la tabla de 4209,5 kHz de la lista de Wikipedia (CC BY-SA 4.0, consultada el 22-11-2026).
+- Los datos de origen están en `tools/estaciones/` y `generar.py` los comprueba y genera el archivo. De las 257 estaciones de la UIT, 254 siguen la regla de turnos (la letra fija la hora); las otras tres se listan al generar.
+- **Los datos son de 2017 y pueden haber cambiado.** Sirven para orientarse, no sustituyen a las publicaciones oficiales en vigor.
+
+**Aspecto.** Claro, oscuro o automático (el del equipo), con un selector en la cabecera; se recuerda en cada navegador.
+
+**Seguridad.** Los cambios (ajustes, estaciones y temas) solo se aceptan por POST y con una cabecera propia: otra página web abierta en el mismo navegador no puede cambiar nada.
+
+Probado: los ajustes y su validación; el cambio de banda por horario; el receptor sin equipo (reintenta sin salir); y la interfaz en un navegador (posición, estaciones en alcance, próximas emisiones, receptores y aspecto). **Sin probar con equipos reales**, y en particular dos receptores a la vez.
+
 ### Previsto
 
 - Sentencias `NRX` de NMEA 0183 para equipos que las admitan.
-- Cambio de banda programado por horario, para alternar onda media y onda corta con un solo receptor.

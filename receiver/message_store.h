@@ -21,3 +21,9 @@ char *get_status_json(void);
 /* What the receiver is doing, for get_status_json() */
 void set_status(const char *tag, const char *value);
 void set_status_now(const char *tag);
+
+/* Settings shared by the web interface and the receivers */
+int valid_setting(const char *tag, const char *value);
+int set_setting(const char *tag, const char *value);
+int get_setting(const char *tag, char *out, size_t out_size);
+char *get_settings_json(void);

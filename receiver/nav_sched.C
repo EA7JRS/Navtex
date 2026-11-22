@@ -16,6 +16,13 @@ static fir_filter3 fir_filter_518(&decoder_518);
 static fir_filter3 fir_filter_490(&decoder_490);
 
 
+// Start clean after a change of band or receiver
+extern "C" void reset_decoders()
+{
+	state_machine_518.reset();
+	state_machine_490.reset();
+}
+
 extern "C" void init_fir2_wrapper()
 {
 	init_fir_filter2(&fir_filter_518,&fir_filter_490);

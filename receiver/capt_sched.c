@@ -60,6 +60,34 @@ long iq_centre_hz(void)
 volatile sig_atomic_t stop_requested = 0;
 // Set when the receiver is unplugged or stops delivering samples.
 volatile sig_atomic_t device_lost = 0;
+volatile sig_atomic_t reconfig_requested = 0;
+int (*iq_settings_changed)(void) = NULL;
+char iq_status_prefix[8] = "";
+
+void reset_decoders(void);
+
+// Status entry of this receiver ("rx1.alive"); the unprefixed entries are kept
+// too, for programs that only know about one receiver.
+static void status_now(const char *name)
+{
+    char key[40];
+    set_status_now(name);
+    if (iq_status_prefix[0] != '\0')
+    {
+        snprintf(key, sizeof(key), "%s%s", iq_status_prefix, name);
+        set_status_now(key);
+    }
+}
+static void status_text(const char *name, const char *value)
+{
+    char key[40];
+    set_status(name, value);
+    if (iq_status_prefix[0] != '\0')
+    {
+        snprintf(key, sizeof(key), "%s%s", iq_status_prefix, name);
+        set_status(key, value);
+    }
+}
 
 // Seconds without new samples before the receiver is considered lost.
 #define STREAM_TIMEOUT_S 15
@@ -227,8 +255,9 @@ void consume_loop(void)
     int last_in_idx = in_idx;
     time_t last_sample_time = time(NULL);
     time_t last_heartbeat = 0;
+    time_t last_settings_check = time(NULL);
 
-    while(!stop_requested && !device_lost)
+    while(!stop_requested && !device_lost && !reconfig_requested)
     {
 	usleep(50000);
 	pthread_mutex_lock(&in_mutex);
@@ -244,8 +273,15 @@ void consume_loop(void)
             if (last_sample_time - last_heartbeat >= 60)
             {
                 last_heartbeat = last_sample_time;
-                set_status_now("receiver_alive");
+                status_now("receiver_alive");
+                status_text("state", "receiving");
             }
+        }
+        // Did somebody change this receiver's settings, or is it time to change band?
+        if (iq_settings_changed != NULL && time(NULL) - last_settings_check >= 5)
+        {
+            last_settings_check = time(NULL);
+            if (iq_settings_changed()) reconfig_requested = 1;
         }
         else if (time(NULL) - last_sample_time > STREAM_TIMEOUT_S)
         {
@@ -637,10 +673,162 @@ void init_dsp()
 }
 
 
+///////////// RECEIVER INSTANCES (settings from the web interface) /////////////
+
+static int instance = 0;              // 0: options from the command line; 1 or 2: settings "rxN.*"
+static char instance_source[16];
+static char instance_serial[40];
+static char instance_signature[512];  // what the current run was started with
+
+static int run_source(const char *source)
+{
+   if (strcmp(source, "sdrplay") == 0)      return sdrplay_source_run();
+   if (strcmp(source, "rtlsdr") == 0)       return rtlsdr_source_run();
+   if (strcmp(source, "file") == 0)         return file_source_run();
+   return -1;
+}
+
+static void instance_setting(const char *name, char *out, size_t out_size)
+{
+    char key[40];
+    snprintf(key, sizeof(key), "rx%d.%s", instance, name);
+    get_setting(key, out, out_size);
+}
+
+// With band "auto" the receiver sits on 518/490 kHz and moves to 4209.5 kHz
+// for each listed slot: from one minute before its start (HHMM, UTC) until
+// eleven minutes after, since a station has ten minutes to transmit.
+static int in_hf_slot(const char *slots, time_t now)
+{
+    struct tm t;
+    int minute_of_day;
+    const char *p = slots;
+
+    gmtime_r(&now, &t);
+    minute_of_day = t.tm_hour * 60 + t.tm_min;
+    while (strlen(p) >= 4)
+    {
+        int start = ((p[0] - '0') * 10 + (p[1] - '0')) * 60 + (p[2] - '0') * 10 + (p[3] - '0');
+        int since = (minute_of_day - (start - 1) + 1440) % 1440;
+        if (since < 12) return 1;
+        p += 4;
+        if (*p == ',') p++;
+    }
+    return 0;
+}
+
+// Reads the settings of this receiver. Returns whether it is switched on and
+// writes everything that matters into `signature`, so a change can be noticed.
+static int read_instance(char *signature, size_t signature_size, int *want_hf)
+{
+    char enabled[4], band[8], slots[200], port[4], bias[4], direct[8], upconv[16], gain[8], ppm[8];
+
+    instance_setting("enabled", enabled, sizeof(enabled));
+    instance_setting("source", instance_source, sizeof(instance_source));
+    instance_setting("band", band, sizeof(band));
+    instance_setting("hf_slots", slots, sizeof(slots));
+    instance_setting("port", port, sizeof(port));
+    instance_setting("bias", bias, sizeof(bias));
+    instance_setting("serial", instance_serial, sizeof(instance_serial));
+    instance_setting("direct", direct, sizeof(direct));
+    instance_setting("upconv", upconv, sizeof(upconv));
+    instance_setting("gain", gain, sizeof(gain));
+    instance_setting("ppm", ppm, sizeof(ppm));
+
+    if (instance_source[0] == '\0')
+#ifdef HAVE_LIBSDRPLAY_API
+        strcpy(instance_source, "sdrplay");
+#else
+        strcpy(instance_source, "rtlsdr");
+#endif
+    *want_hf = strcmp(band, "hf") == 0 || (strcmp(band, "auto") == 0 && in_hf_slot(slots, time(NULL)));
+
+    iq_opt.bias_t = strcmp(bias, "1") == 0;
+    iq_opt.antenna_port = (port[0] == 'B' || port[0] == 'C') ? port[0] : 'A';
+    iq_opt.rtl_serial = instance_serial[0] != '\0' ? instance_serial : NULL;
+    iq_opt.rtl_index = 0;
+    iq_opt.rtl_direct_sampling = (direct[0] >= '0' && direct[0] <= '2' && direct[1] == '\0') ? direct[0] - '0' : -1;
+    iq_opt.rtl_upconverter_hz = atol(upconv);
+    iq_opt.rtl_gain_tenths = (gain[0] >= '0' && gain[0] <= '9') ? (int) (atof(gain) * 10.0 + 0.5) : -1;
+    iq_opt.rtl_ppm = atoi(ppm);
+
+    snprintf(signature, signature_size, "%s|%s|%d|%s|%s|%s|%s|%s|%s|%s", enabled, instance_source, *want_hf,
+             port, bias, instance_serial, direct, upconv, gain, ppm);
+    return strcmp(enabled, "1") == 0;
+}
+
+static int instance_changed(void)
+{
+    char now_signature[512];
+    int want_hf;
+
+    read_instance(now_signature, sizeof(now_signature), &want_hf);
+    return strcmp(now_signature, instance_signature) != 0;
+}
+
+// Sleeps in short steps so a stop request is answered quickly
+static void wait_seconds(int seconds)
+{
+    int i;
+    for (i = 0; i < seconds * 4 && !stop_requested; i++) usleep(250000);
+}
+
+// Runs for as long as the service lives: receives with the current settings
+// and starts again when they change, when the band has to change, or after a
+// failure. Never exits because the receiver is missing or busy.
+static int run_instance(void)
+{
+    int want_hf, enabled, failed;
+
+    snprintf(iq_status_prefix, sizeof(iq_status_prefix), "rx%d.", instance);
+    iq_settings_changed = instance_changed;
+    printf("Receiver %d: settings come from the web interface\n", instance);
+
+    while (!stop_requested)
+    {
+        enabled = read_instance(instance_signature, sizeof(instance_signature), &want_hf);
+        if (!enabled)
+        {
+            status_text("state", "off");
+            while (!stop_requested && !instance_changed()) wait_seconds(5);
+            continue;
+        }
+        navtex_hf = want_hf;
+        device_lost = 0;
+        reconfig_requested = 0;
+        reset_decoders();
+        printf("Receiver %d: %s, %s\n", instance, instance_source, navtex_hf ? "HF, 4209.5 kHz" : "MF, 518 and 490 kHz");
+        status_text("source", instance_source);
+        status_text("band", navtex_hf ? "hf" : "mf");
+        status_text("state", "starting");
+        status_now("receiver_started");
+
+        failed = run_source(instance_source);
+
+        if (stop_requested) break;
+        if (reconfig_requested)
+        {
+            printf("Receiver %d: settings or band changed\n", instance);
+            continue;
+        }
+        if (failed)
+        {
+            // unplugged, in use by another program, or not built in: try again later
+            status_text("state", "unavailable");
+            printf("Receiver %d: not available, trying again in 15 s\n", instance);
+            wait_seconds(15);
+        }
+    }
+    status_text("state", "stopped");
+    return 0;
+}
+
 static void usage(const char *prog)
 {
     printf(
 "Usage: %s [options]\n"
+"  -n number   receiver 1 or 2: take every setting from the web interface and follow\n"
+"              its changes without restarting (this is what the services use)\n"
 "  -s source   sdrplay | rtlsdr | file   (default: sdrplay when built in, else rtlsdr)\n"
 "  -B band     mf: 518 and 490 kHz at the same time (default)\n"
 "              hf: 4209.5 kHz only\n"
@@ -680,7 +868,7 @@ int main(int argc, char *argv[])
   // character by character only when somebody is watching
   navtex_verbose = isatty(STDOUT_FILENO) ? 1 : 0;
 
-  while ((c = getopt (argc, argv, "bdhtvqs:B:p:i:S:D:u:g:P:f:")) != -1) {
+  while ((c = getopt (argc, argv, "bdhtvqn:s:B:p:i:S:D:u:g:P:f:")) != -1) {
     switch (c)
       {
       case 'b':
@@ -702,6 +890,10 @@ int main(int argc, char *argv[])
         return 0;
       case 't':
         iq_opt.file_realtime = 1;
+        break;
+      case 'n':
+        instance = atoi(optarg);
+        if (instance < 1 || instance > 2) { printf("invalid receiver number (1 or 2)\n"); return 1; }
         break;
       case 's':
         source = optarg;
@@ -748,7 +940,7 @@ int main(int argc, char *argv[])
         iq_opt.file_path = optarg;
         break;
       case '?':
-        if (optopt != 0 && strchr("sBpiSDugPf", optopt) != NULL)
+        if (optopt != 0 && strchr("nsBpiSDugPf", optopt) != NULL)
           fprintf (stderr, "Option -%c requires an argument.\n", optopt);
         else if (isprint (optopt))
           fprintf (stderr, "Unknown option `-%c'.\n", optopt);
@@ -763,16 +955,6 @@ int main(int argc, char *argv[])
     }
   }
 
-   if (source == NULL)
-   {
-       if (iq_opt.file_path != NULL) source = "file";
-       else
-#ifdef HAVE_LIBSDRPLAY_API
-           source = "sdrplay";
-#else
-           source = "rtlsdr";
-#endif
-   }
    init_dsp();
    init_fir2_wrapper();
 
@@ -780,18 +962,34 @@ int main(int argc, char *argv[])
    signal(SIGTERM, on_stop_signal);
 
    if(debug_mode) { PrepWav(); }
-   set_status("source", source);
-   set_status("band", navtex_hf ? "hf" : "mf");
-   printf("Band: %s\n", navtex_hf ? "HF, 4209.5 kHz" : "MF, 518 and 490 kHz");
-   set_status_now("receiver_started");
 
-   // A source only returns when it is asked to stop, when the receiver cannot
-   // be opened or when it is lost. Exit instead of staying alive without
-   // receiving: a service manager can then restart us.
-   if (strcmp(source, "sdrplay") == 0)      failed = sdrplay_source_run();
-   else if (strcmp(source, "rtlsdr") == 0)  failed = rtlsdr_source_run();
-   else if (strcmp(source, "file") == 0)    failed = file_source_run();
-   else { printf("unknown source '%s' (sdrplay, rtlsdr or file)\n", source); return 1; }
+   if (instance > 0)
+   {
+       failed = run_instance();
+   }
+   else
+   {
+       if (source == NULL)
+       {
+           if (iq_opt.file_path != NULL) source = "file";
+           else
+#ifdef HAVE_LIBSDRPLAY_API
+               source = "sdrplay";
+#else
+               source = "rtlsdr";
+#endif
+       }
+       status_text("source", source);
+       status_text("band", navtex_hf ? "hf" : "mf");
+       printf("Band: %s\n", navtex_hf ? "HF, 4209.5 kHz" : "MF, 518 and 490 kHz");
+       status_now("receiver_started");
+
+       // A source only returns when it is asked to stop, when the receiver cannot
+       // be opened or when it is lost. Exit instead of staying alive without
+       // receiving: a service manager can then restart us.
+       failed = run_source(source);
+       if (failed < 0) { printf("unknown source '%s' (sdrplay, rtlsdr or file)\n", source); return 1; }
+   }
 
    if(debug_mode) { EndWav(); }
 

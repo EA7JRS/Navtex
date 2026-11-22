@@ -41,6 +41,7 @@
  * 2026 - Manuel - EA7JRS (fork EA7JRS/Navtex): request handling rewritten.
  *  - URLs are length-checked and never copied into fixed buffers;
  *  - /saveconfig only accepts the known tags and A-Z values;
+ *  - changes need POST and the X-Navtex header (no cross-site requests);
  *  - static files cannot be requested outside the web root;
  *  - JSON answers are sent as application/json, files with their type;
  *  - optional listen address:  navtexwebserver [port] [address]
@@ -141,7 +142,40 @@ safe_static_path (const char *path)
   return 1;
 }
 
-/* GET /saveconfig/<tag>/<value>   (the value may be empty) */
+/* Changes are only accepted with the X-Navtex header. A browser cannot add it
+   to a request made from another site without asking first, and the answer to
+   that question is never yes: other pages cannot change our settings. */
+static int
+is_own_request (struct MHD_Connection *connection)
+{
+  return MHD_lookup_connection_value (connection, MHD_HEADER_KIND, "X-Navtex") != NULL;
+}
+
+/* POST /api/settings/<key>/<value>   (the value may be empty) */
+static enum MHD_Result
+handle_setting (struct MHD_Connection *connection, const char *url)
+{
+  char tag[24];
+  char value[200];
+  const char *p = url + strlen ("/api/settings/");
+  const char *slash = strchr (p, '/');
+  size_t tag_len, value_len;
+
+  if (slash == NULL)
+    return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+  tag_len = (size_t) (slash - p);
+  value_len = strlen (slash + 1);
+  if (tag_len == 0 || tag_len >= sizeof (tag) || value_len >= sizeof (value))
+    return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+  memcpy (tag, p, tag_len);
+  tag[tag_len] = '\0';
+  memcpy (value, slash + 1, value_len + 1);
+  if (set_setting (tag, value) != 0)
+    return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+  return send_text (connection, MHD_HTTP_OK, "{}", "application/json", 0);
+}
+
+/* POST /saveconfig/<tag>/<value>   (the value may be empty) */
 static enum MHD_Result
 handle_saveconfig (struct MHD_Connection *connection, const char *url)
 {
@@ -164,7 +198,7 @@ handle_saveconfig (struct MHD_Connection *connection, const char *url)
   /* update_config() validates the tag and the value and uses a bound statement */
   if (update_config (tag, value) != 0)
     return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
-  return send_text (connection, MHD_HTTP_OK, "{}", "application/json", 1);
+  return send_text (connection, MHD_HTTP_OK, "{}", "application/json", 0);
 }
 
 /* HTTP access handler call back */
@@ -262,8 +296,22 @@ http_ahc (void *cls,
       free (st);
       return ret;
   }
-  if (strncmp (url, "/saveconfig/", 12) == 0)
-      return handle_saveconfig (connection, url);
+  if (strcmp (url, "/api/settings") == 0)
+  {
+      char *st = get_settings_json ();
+      if (st == NULL)
+        return send_text (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, ERROR_JSON, "application/json", 1);
+      ret = send_text (connection, MHD_HTTP_OK, st, "application/json", 0);
+      free (st);
+      return ret;
+  }
+  if (strncmp (url, "/api/settings/", 14) == 0 || strncmp (url, "/saveconfig/", 12) == 0)
+  {
+      /* the two addresses that change something */
+      if (0 != strcmp (method, MHD_HTTP_METHOD_POST) || !is_own_request (connection))
+        return send_text (connection, MHD_HTTP_FORBIDDEN, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+      return (url[1] == 'a') ? handle_setting (connection, url) : handle_saveconfig (connection, url);
+  }
   if (strncmp (url, "/messagetext/", 13) == 0)
   {
       const char *digits = url + 13;

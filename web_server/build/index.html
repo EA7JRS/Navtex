@@ -11,6 +11,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>Navtex</title>
+  <script src="tema.js"></script>
   <link rel="stylesheet" href="estilo.css">
 </head>
 <body>
@@ -24,39 +25,21 @@
     </div>
     <nav class="pestanas" aria-label="Secciones">
       <button type="button" class="pestana activa" data-vista="mensajes" id="pestana-mensajes">Mensajes <span class="cuenta" id="cuenta-nuevos" hidden></span></button>
-      <button type="button" class="pestana" data-vista="ajustes" id="pestana-ajustes">Estaciones y temas</button>
+      <button type="button" class="pestana" data-vista="estaciones" id="pestana-estaciones">Estaciones</button>
+      <button type="button" class="pestana" data-vista="receptores" id="pestana-receptores">Receptores</button>
       <button type="button" class="pestana" data-vista="acerca" id="pestana-acerca">Acerca de</button>
+      <label class="tema"><span class="oculto">Aspecto</span>
+        <select id="tema">
+          <option value="auto">Aspecto: automático</option>
+          <option value="claro">Aspecto: claro</option>
+          <option value="oscuro">Aspecto: oscuro</option>
+        </select>
+      </label>
     </nav>
   </header>
 
   <main>
-    <section class="estado" aria-label="Estado del receptor" id="estado">
-      <div class="dato" id="estado-receptor">
-        <span class="etiqueta">Receptor</span>
-        <span class="valor"><span class="punto" id="punto-receptor"></span><span id="texto-receptor">Consultando…</span></span>
-        <span class="detalle" id="detalle-receptor"></span>
-      </div>
-      <div class="dato">
-        <span class="etiqueta">518 kHz · internacional</span>
-        <span class="valor" id="sinc-518">—</span>
-        <span class="detalle">último sincronismo</span>
-      </div>
-      <div class="dato">
-        <span class="etiqueta">490 kHz · nacional</span>
-        <span class="valor" id="sinc-490">—</span>
-        <span class="detalle">último sincronismo</span>
-      </div>
-      <div class="dato">
-        <span class="etiqueta">4209,5 kHz · onda corta</span>
-        <span class="valor" id="sinc-4209">—</span>
-        <span class="detalle">último sincronismo</span>
-      </div>
-      <div class="dato">
-        <span class="etiqueta">Hora UTC</span>
-        <span class="valor mono" id="hora-utc">—</span>
-        <span class="detalle" id="total-mensajes"></span>
-      </div>
-    </section>
+    <section class="estado" aria-label="Estado" id="estado"></section>
 
     <p class="aviso" id="error-general" hidden></p>
 
@@ -83,11 +66,34 @@
       <p class="vacio" id="vacio" hidden></p>
     </section>
 
-    <section id="vista-ajustes" aria-label="Estaciones y temas" hidden>
-      <p class="nota">Elija de qué estaciones y de qué temas quiere ver mensajes, por separado para cada frecuencia. El receptor guarda todo lo que llega; esto solo decide lo que se muestra.</p>
+    <section id="vista-estaciones" aria-label="Estaciones" hidden>
+      <div class="tarjeta" id="tarjeta-posicion">
+        <h2>Mi posición</h2>
+        <p class="nota">Con la posición, la lista de cada frecuencia se ordena por distancia y dice qué estaciones le quedan en alcance. Vale latitud y longitud en grados decimales (<span class="mono">36.53, -6.29</span>) o un localizador (<span class="mono">IM66uq</span>).</p>
+        <form class="fila" id="form-posicion">
+          <label class="campo crece"><span class="oculto">Posición</span>
+            <input type="text" id="posicion" placeholder="36.53, -6.29  o  IM66uq" autocomplete="off" spellcheck="false">
+          </label>
+          <button type="submit" class="boton" id="guardar-posicion">Guardar</button>
+          <button type="button" class="boton" id="quitar-posicion">Quitar</button>
+        </form>
+        <p class="nota" id="posicion-actual"></p>
+      </div>
+      <div class="tarjeta" id="tarjeta-proximas">
+        <h2>Próximas emisiones de las estaciones que sigo</h2>
+        <ol class="proximas" id="proximas"></ol>
+      </div>
       <div class="tarjetas" id="ajustes"></div>
-      <p class="nota">La letra de cada estación depende de la zona (NAVAREA): en la cabecera de cada mensaje, <span class="mono">ZCZC GA12</span>, la primera letra es la estación y la segunda el tema. Los temas A, B, D y L (avisos a los navegantes, avisos meteorológicos y salvamento) no se pueden quitar, como en un receptor NAVTEX homologado.</p>
       <p class="aviso" id="estado-ajustes" hidden></p>
+      <p class="nota" id="fuente-estaciones"></p>
+      <p class="nota">En la cabecera de cada mensaje, <span class="mono">ZCZC GA12</span>, la primera letra es la estación y la segunda el tema. Seguir una letra muestra los mensajes de todas las estaciones que la usan; las lejanas con la misma letra solo llegan de noche. Los temas A, B, D y L no se pueden quitar, como en un receptor NAVTEX homologado.</p>
+    </section>
+
+    <section id="vista-receptores" aria-label="Receptores" hidden>
+      <p class="nota">Hay dos receptores. Cada uno usa un equipo y escucha una banda: 518 y 490 kHz a la vez, o 4209,5 kHz. Con dos equipos se reciben las tres frecuencias a la vez; con uno solo, puede alternar por horario. Los cambios se aplican solos en unos segundos.</p>
+      <div class="tarjetas" id="receptores"></div>
+      <p class="aviso" id="estado-receptores" hidden></p>
+      <p class="nota">Un equipo solo lo puede usar un programa a la vez. Si el receptor dice «sin equipo», puede estar desconectado o en uso por otro programa (por ejemplo, SDRconnect o SDR++): el receptor lo sigue intentando cada 15 segundos.</p>
     </section>
 
     <section id="vista-acerca" aria-label="Acerca de" hidden>
@@ -95,6 +101,7 @@
         <h2>Navtex</h2>
         <p>Receptor NAVTEX por software para SDRplay y RTL-SDR: escucha 518 y 490 kHz a la vez, o 4209,5 kHz en onda corta, en segundo plano, y guarda los mensajes para leerlos cuando haga falta.</p>
         <p>Navtex · © 2026 Manuel - EA7JRS</p>
+        <p>Estaciones: Tabla 4 de la UIT, «Coast stations participating in the NAVTEX services» (2017), y Wikipedia, «List of Navtex stations» (CC BY-SA 4.0), para 4209,5 kHz.</p>
         <p>Basado en <a href="https://github.com/bartelvdh/Navtex" rel="noopener">Navtex</a>, de bartelvdh. Licencia MIT.</p>
         <p><a href="https://github.com/EA7JRS/Navtex" rel="noopener">github.com/EA7JRS/Navtex</a> · parte del ecosistema APRS LoRa+</p>
         <p><a class="boton" href="https://paypal.me/ea7jrs" rel="noopener" id="donar">Donar con PayPal</a></p>

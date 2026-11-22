@@ -11,12 +11,12 @@
 # Antes hay que haber compilado e instalado los programas (./configure, make,
 # sudo make install). Qué hace:
 #   1. deja /opt/Navtex y su base de datos a nombre del usuario de servicio;
-#   2. crea /etc/default/navtex (opciones del receptor, puerto web) si no existe;
-#   3. instala navtex-receiver.service y navtex-web.service, sin root;
-#   4. si hay otros servicios que usan el mismo receptor SDRplay (SDRconnect,
-#      SDR++ en modo servidor), los declara incompatibles: arrancar uno para
-#      el otro, y nunca se pisan. En ese caso el receptor NAVTEX queda
-#      instalado pero no arranca solo.
+#   2. crea /etc/default/navtex (puerto de la interfaz web) si no existe;
+#   3. instala la interfaz web y dos receptores (1 y 2), sin root. Qué equipo
+#      usa cada uno y en qué banda se elige en la web, pestaña Receptores;
+#   4. si hay otros servicios que usan el receptor SDRplay (SDRconnect, SDR++
+#      en modo servidor), el receptor 1 queda incompatible con ellos: arrancar
+#      uno para el otro. En ese caso el receptor 1 no arranca solo.
 set -eu
 
 USUARIO="${SUDO_USER:-}"
@@ -37,9 +37,9 @@ UNIDADES=/etc/systemd/system
 paso() { printf '\n== %s\n' "$*"; }
 
 if [ "$QUITAR" = 1 ]; then
-  systemctl disable --now navtex-receiver.service navtex-web.service 2>/dev/null || true
-  rm -f "$UNIDADES/navtex-receiver.service" "$UNIDADES/navtex-web.service"
-  rm -rf "$UNIDADES/navtex-receiver.service.d"
+  systemctl disable --now navtex-receiver.service navtex-receiver@1.service navtex-receiver@2.service navtex-web.service 2>/dev/null || true
+  rm -f "$UNIDADES/navtex-receiver.service" "$UNIDADES/navtex-receiver@.service" "$UNIDADES/navtex-web.service"
+  rm -rf "$UNIDADES/navtex-receiver.service.d" "$UNIDADES/navtex-receiver@1.service.d"
   systemctl daemon-reload
   echo "Servicios retirados. Se conservan /opt/Navtex, /etc/default/navtex y los programas."
   exit 0
@@ -68,51 +68,58 @@ else
 fi
 
 paso "Servicios"
-for u in navtex-receiver navtex-web; do
-  sed "s/@USUARIO@/$USUARIO/" "$DIR/systemd/$u.service" > "$UNIDADES/$u.service"
-  chmod 644 "$UNIDADES/$u.service"
-done
+# La versión anterior tenía un solo receptor, navtex-receiver.service
+if [ -f "$UNIDADES/navtex-receiver.service" ]; then
+  systemctl disable --now navtex-receiver.service >/dev/null 2>&1 || true
+  rm -f "$UNIDADES/navtex-receiver.service"
+  rm -rf "$UNIDADES/navtex-receiver.service.d"
+fi
+sed "s/@USUARIO@/$USUARIO/" "$DIR/systemd/navtex-receiver@.service" > "$UNIDADES/navtex-receiver@.service"
+sed "s/@USUARIO@/$USUARIO/" "$DIR/systemd/navtex-web.service" > "$UNIDADES/navtex-web.service"
+chmod 644 "$UNIDADES/navtex-receiver@.service" "$UNIDADES/navtex-web.service"
 
-# Otros servicios que abren el mismo receptor SDRplay
+# Otros servicios que abren el receptor SDRplay: el receptor 1 alterna con ellos
 OTROS=""
 for u in sdrconnect.service sdrpp-server.service; do
   if systemctl cat "$u" >/dev/null 2>&1; then OTROS="$OTROS $u"; fi
 done
 OTROS="${OTROS# }"
-USA_RTL=0
-if grep -q '^RECEIVER_OPTS=.*-s *rtlsdr' /etc/default/navtex; then USA_RTL=1; fi
-rm -rf "$UNIDADES/navtex-receiver.service.d"
-if [ -n "$OTROS" ] && [ "$USA_RTL" = 0 ]; then
-  mkdir -p "$UNIDADES/navtex-receiver.service.d"
-  printf '# Comparten el receptor SDRplay: arrancar uno para el otro\n[Unit]\nConflicts=%s\n' "$OTROS" > "$UNIDADES/navtex-receiver.service.d/10-receptor-compartido.conf"
+rm -rf "$UNIDADES/navtex-receiver@1.service.d"
+if [ -n "$OTROS" ]; then
+  mkdir -p "$UNIDADES/navtex-receiver@1.service.d"
+  printf '# Comparten el receptor SDRplay: arrancar uno para el otro\n[Unit]\nConflicts=%s\n' "$OTROS" > "$UNIDADES/navtex-receiver@1.service.d/10-receptor-compartido.conf"
 fi
 systemctl daemon-reload
 
 # restart, y no solo arrancar: si ya estaba en marcha seguiría con el programa anterior
 systemctl enable navtex-web.service
 systemctl restart navtex-web.service
-if [ -n "$OTROS" ] && [ "$USA_RTL" = 0 ]; then
-  systemctl disable navtex-receiver.service >/dev/null 2>&1 || true
-  echo "El receptor SDRplay lo comparten: $OTROS"
-  # Si estaba recibiendo, que siga, pero con el programa nuevo
-  if systemctl is-active --quiet navtex-receiver.service; then systemctl restart navtex-receiver.service; fi
-  echo "navtex-receiver queda instalado pero NO arranca solo, para no quitarles el receptor."
-  echo "  Recibir NAVTEX:      sudo systemctl start navtex-receiver   (para los otros)"
-  echo "  Volver a lo de antes: sudo systemctl start ${OTROS%% *}"
+# El receptor 2 está siempre en marcha; no toca ningún equipo hasta que se enciende en la web
+systemctl enable navtex-receiver@2.service
+systemctl restart navtex-receiver@2.service
+if [ -n "$OTROS" ]; then
+  systemctl disable navtex-receiver@1.service >/dev/null 2>&1 || true
+  if systemctl is-active --quiet navtex-receiver@1.service; then systemctl restart navtex-receiver@1.service; fi
+  echo "El receptor 1 comparte el SDRplay con: $OTROS"
+  echo "Queda instalado pero NO arranca solo, para no quitarles el receptor."
+  echo "  Recibir NAVTEX con él: sudo systemctl start navtex-receiver@1   (para los otros)"
+  echo "  Volver a lo de antes:  sudo systemctl start ${OTROS%% *}"
 else
-  systemctl enable navtex-receiver.service
-  systemctl restart navtex-receiver.service
+  systemctl enable navtex-receiver@1.service
+  systemctl restart navtex-receiver@1.service
 fi
+echo "El receptor 2 está en marcha y espera a que lo encienda en la web (pestaña Receptores)."
 
 paso "Estado"
 sleep 3
 PUERTO="$(sed -n 's/^WEB_PORT=\([0-9][0-9]*\).*/\1/p' /etc/default/navtex | head -1)"
 echo "navtex-web:      $(systemctl is-active navtex-web.service 2>/dev/null || true)  (http://<este equipo>:${PUERTO:-8080}/)"
-echo "navtex-receiver: $(systemctl is-active navtex-receiver.service 2>/dev/null || true)"
+echo "receptor 1:       $(systemctl is-active navtex-receiver@1.service 2>/dev/null || true)"
+echo "receptor 2:       $(systemctl is-active navtex-receiver@2.service 2>/dev/null || true)"
 if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
   if ! ufw status | grep -q "^${PUERTO:-8080}/tcp"; then
     echo "El cortafuegos está activo y no abre el puerto ${PUERTO:-8080}. Para la red local, por ejemplo:"
     echo "  sudo ufw allow from 192.168.0.0/16 to any port ${PUERTO:-8080} proto tcp"
   fi
 fi
-echo "Registro:  journalctl -u navtex-receiver -f"
+echo "Registro:  journalctl -u 'navtex-receiver@*' -f"

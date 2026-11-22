@@ -77,6 +77,11 @@ void open_db(sqlite3 **db) {
         if (!schema_checked) {
                 sqlite3_exec(*db, "alter table messages add column complete integer default 1", NULL, NULL, NULL);
                 sqlite3_exec(*db, "create table if not exists status (tag text primary key, value text)", NULL, NULL, NULL);
+                sqlite3_exec(*db, "create table if not exists settings (tag text primary key, value text)", NULL, NULL, NULL);
+                // Receiver 1 keeps doing what a fresh install did; receiver 2 waits to be switched on
+                sqlite3_exec(*db, "insert or ignore into settings (tag,value) values"
+                                  " ('rx1.enabled','1'),('rx1.band','mf'),('rx1.port','A'),('rx1.bias','0'),"
+                                  " ('rx2.enabled','0'),('rx2.band','mf'),('rx2.port','A'),('rx2.bias','0'),('rx2.source','rtlsdr')", NULL, NULL, NULL);
                 // settings for the HF channel (4209.5 kHz), for databases older than it
                 sqlite3_exec(*db, "insert into config (tag,value) select 'stations4209','ABCDEFGHIJKLMNOPQRSTUVWXYZ' where not exists (select 1 from config where tag='stations4209')", NULL, NULL, NULL);
                 sqlite3_exec(*db, "insert into config (tag,value) select 'messages4209','ABCDEFL' where not exists (select 1 from config where tag='messages4209')", NULL, NULL, NULL);
@@ -572,6 +577,130 @@ char *get_status_json(void) {
                         cJSON_AddNumberToObject(json, "messages", sqlite3_column_int(stmt, 0));
                         cJSON_AddNumberToObject(json, "last_id", sqlite3_column_int(stmt, 1));
                 }
+                sqlite3_finalize(stmt);
+        }
+        sqlite3_close(db);
+        json_str = cJSON_PrintUnformatted(json);
+        result = json_str ? strdup(json_str) : NULL;
+        cJSON_free(json_str);
+        cJSON_Delete(json);
+        return result;
+}
+
+
+// ---------------------------------------------------------------------------
+// Settings shared by the web interface and the receivers (fork EA7JRS/Navtex)
+// ---------------------------------------------------------------------------
+
+static int all_of(const char *v, const char *allowed, size_t max_len) {
+        size_t n = strlen(v);
+        if (n > max_len) return 0;
+        return strspn(v, allowed) == n;
+}
+
+static int one_of(const char *v, const char *a, const char *b, const char *c, const char *d) {
+        return (a && strcmp(v, a) == 0) || (b && strcmp(v, b) == 0) || (c && strcmp(v, c) == 0) || (d && strcmp(v, d) == 0);
+}
+
+// "HHMM,HHMM,..." with valid hours and minutes
+static int valid_slots(const char *v) {
+        size_t n = strlen(v), i;
+        if (n == 0) return 1;
+        if (n > 36 * 5 || (n + 1) % 5 != 0) return 0;
+        for (i = 0; i < n; i += 5) {
+                if (v[i] < '0' || v[i] > '2' || v[i+1] < '0' || v[i+1] > '9' || v[i+2] < '0' || v[i+2] > '5' || v[i+3] < '0' || v[i+3] > '9') return 0;
+                if ((v[i] - '0') * 10 + (v[i+1] - '0') > 23) return 0;
+                if (i + 4 < n && v[i+4] != ',') return 0;
+        }
+        return 1;
+}
+
+// "lat,lon" in decimal degrees
+static int valid_position(const char *v) {
+        double lat, lon;
+        char extra;
+        if (v[0] == '\0') return 1;
+        if (!all_of(v, "0123456789.,-", 32)) return 0;
+        if (sscanf(v, "%lf,%lf%c", &lat, &lon, &extra) != 2) return 0;
+        return lat >= -90.0 && lat <= 90.0 && lon >= -180.0 && lon <= 180.0;
+}
+
+// Only known settings, each with its own rule. Returns 1 when acceptable.
+int valid_setting(const char *tag, const char *value) {
+        const char *key;
+        if (tag == NULL || value == NULL) return 0;
+        if (strcmp(tag, "position") == 0) return valid_position(value);
+        if ((strncmp(tag, "rx1.", 4) != 0 && strncmp(tag, "rx2.", 4) != 0)) return 0;
+        key = tag + 4;
+        if (strcmp(key, "enabled") == 0 || strcmp(key, "bias") == 0) return one_of(value, "0", "1", NULL, NULL);
+        if (strcmp(key, "source") == 0)   return one_of(value, "sdrplay", "rtlsdr", NULL, NULL);
+        if (strcmp(key, "band") == 0)     return one_of(value, "mf", "hf", "auto", NULL);
+        if (strcmp(key, "hf_slots") == 0) return valid_slots(value);
+        if (strcmp(key, "port") == 0)     return one_of(value, "A", "B", "C", NULL);
+        if (strcmp(key, "serial") == 0)   return all_of(value, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-", 32);
+        if (strcmp(key, "direct") == 0)   return one_of(value, "auto", "0", "1", "2");
+        if (strcmp(key, "upconv") == 0)   return all_of(value, "0123456789", 10);
+        if (strcmp(key, "gain") == 0)     return strcmp(value, "auto") == 0 || (value[0] != '\0' && all_of(value, "0123456789.", 5));
+        if (strcmp(key, "ppm") == 0)      return value[0] != '\0' && all_of(value, "0123456789-", 4) && strchr(value + 1, '-') == NULL;
+        return 0;
+}
+
+// 0 saved, -1 not acceptable, -2 database error
+int set_setting(const char *tag, const char *value) {
+        sqlite3 *db;
+        sqlite3_stmt *stmt;
+        int rc;
+
+        if (!valid_setting(tag, value)) return -1;
+        open_db(&db);
+        if (db == NULL) return -2;
+        if (sqlite3_prepare_v2(db, "insert into settings (tag,value) values (?1,?2) on conflict(tag) do update set value = excluded.value", -1, &stmt, NULL) != SQLITE_OK) {
+                sqlite3_close(db);
+                return -2;
+        }
+        sqlite3_bind_text(stmt, 1, tag, -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 2, value, -1, SQLITE_STATIC);
+        rc = sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return rc == SQLITE_DONE ? 0 : -2;
+}
+
+// Copies the value of a setting into out (empty when it is not set). Returns 1 when found.
+int get_setting(const char *tag, char *out, size_t out_size) {
+        sqlite3 *db;
+        sqlite3_stmt *stmt;
+        int found = 0;
+
+        if (out_size == 0) return 0;
+        out[0] = '\0';
+        open_db(&db);
+        if (db == NULL) return 0;
+        if (sqlite3_prepare_v2(db, "select value from settings where tag = ?1", -1, &stmt, NULL) == SQLITE_OK) {
+                sqlite3_bind_text(stmt, 1, tag, -1, SQLITE_STATIC);
+                if (sqlite3_step(stmt) == SQLITE_ROW && sqlite3_column_text(stmt, 0) != NULL) {
+                        snprintf(out, out_size, "%s", (const char *) sqlite3_column_text(stmt, 0));
+                        found = 1;
+                }
+                sqlite3_finalize(stmt);
+        }
+        sqlite3_close(db);
+        return found;
+}
+
+char *get_settings_json(void) {
+        cJSON *json;
+        sqlite3 *db;
+        sqlite3_stmt *stmt;
+        char *json_str, *result;
+
+        open_db(&db);
+        if (db == NULL) return NULL;
+        json = cJSON_CreateObject();
+        if (sqlite3_prepare_v2(db, "select tag,value from settings", -1, &stmt, NULL) == SQLITE_OK) {
+                while (sqlite3_step(stmt) == SQLITE_ROW)
+                        if (sqlite3_column_text(stmt, 0) != NULL && sqlite3_column_text(stmt, 1) != NULL)
+                                cJSON_AddStringToObject(json, (const char *) sqlite3_column_text(stmt, 0), (const char *) sqlite3_column_text(stmt, 1));
                 sqlite3_finalize(stmt);
         }
         sqlite3_close(db);

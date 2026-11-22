@@ -124,6 +124,7 @@ void message_line_out();
 
   public:         
 	byte_state_machine(unsigned int frequency);
+	void reset() { init(); }   // forget any message in progress (band or receiver change)
 	void receive_bit(char bit_received);
 };
 

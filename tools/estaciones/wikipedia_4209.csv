@@ -1,0 +1,7 @@
+area,pais,estacion,lat,lon,khz,b1,horas,alcance,idioma,estado
+III,Turkey,Istanbul,41.067,28.950,4209.5,M,"0200,0600,1000,1400,1800,2200",,,Operational
+III,Egypt,Serapeum (Ismailia),30.4703,32.3668,4209.5,X,"0750,1150",,,Operational
+III,Greece,Heraklion,35.3229,25.7490,4209.5,S,"0300,0700,1100,1500,1900,2300",,,Operational
+IV,United States,New Orleans,29.8846,-89.9456,4209.5,G,"0300,0700,1100,1500,1900,2300",425,,Operational
+XI,China,Shanghai,31.1089,121.5442,4209.5,Q,"1840",,,Operational
+XI,Viet Nam,Haiphong,20.733,106.733,4209.5,W,"0230,0630,1030,1430,1830,2230",,,Operational

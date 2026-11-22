@@ -39,6 +39,12 @@ extern struct iq_options iq_opt;
 
 /* Set by SIGINT/SIGTERM: stop and release the receiver */
 extern volatile sig_atomic_t stop_requested;
+/* Set when the settings of this receiver changed: stop, re-read them and start again */
+extern volatile sig_atomic_t reconfig_requested;
+/* Asked every few seconds while receiving; returns 1 when the settings changed (may be NULL) */
+extern int (*iq_settings_changed)(void);
+/* Prefix of the status entries of this receiver: "" or "rx1." */
+extern char iq_status_prefix[8];
 /* Set by a source when its receiver is unplugged or fails */
 extern volatile sig_atomic_t device_lost;
 
