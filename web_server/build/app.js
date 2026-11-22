@@ -107,6 +107,8 @@
   function claveFreq(f) { return f === 490 || f === 4209 ? String(f) : '518'; }
   function seSigue(m) {
     var f = claveFreq(m.freq);
+    // Los mensajes con número 00 se muestran siempre, se siga o no esa estación o ese tema
+    if (m.number === 0) return true;
     return config['stations' + f].indexOf(m.station) >= 0 &&
       (OBLIGATORIOS.indexOf(m.subject) >= 0 || config['messages' + f].indexOf(m.subject) >= 0);
   }
