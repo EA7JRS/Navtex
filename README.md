@@ -166,7 +166,16 @@ El uso previsto es preguntar cada minuto con el último `id` recibido. Las horas
 
 **NMEA 2000.** No existe un mensaje normalizado de NMEA 2000 para el texto de NAVTEX (el formato normalizado es la sentencia `NRX` de NMEA 0183). Este programa no inventa uno: los mensajes llegan al bus a través de S.A.T.-APRS+, que los recoge por esta API y los difunde con el resto de sus avisos.
 
+### Fase 5 · interfaz web nueva, en español
+
+La interfaz original venía compilada y sin su código fuente, así que no se podía traducir ni modificar. Se ha sustituido por una nueva (`web_server/build/`: `index.html`, `estilo.css`, `app.js`), escrita a mano y sin paso de compilación:
+
+- **Mensajes:** lista con el tema en claro, la primera línea del texto, la estación, la frecuencia y hace cuánto llegó; colores por importancia (salvamento, aviso meteorológico, aviso a los navegantes); marca de «nuevo» y de «cortado»; filtros por frecuencia y tema, búsqueda en el texto y opción de ver también lo que no se sigue.
+- **Estado del receptor:** si está recibiendo, con qué equipo, y el último sincronismo en 518 y en 490 kHz.
+- **Estaciones y temas:** por frecuencia. Los temas A, B, D y L no se pueden quitar, como en un receptor homologado.
+- Se ve bien en el móvil, sigue el modo claro u oscuro del equipo y **no carga nada de Internet**: funciona a bordo sin conexión.
+- Lo recibido por radio se muestra siempre como texto, nunca se interpreta, y el servidor prohíbe a la página cargar nada que no sea suyo.
+
 ### Previsto
 
 - Sentencias `NRX` de NMEA 0183 para equipos que las admitan.
-- Interfaz web nueva, en español.

@@ -481,7 +481,7 @@ char *get_messages_since(unsigned int since_id, int limit) {
         open_db(&db);
         if (db == NULL) return NULL;
         json = cJSON_CreateArray();
-        if (sqlite3_prepare_v2(db, "select id,bbbb,freq,timestamp,complete,message from messages where id > ?1 order by id asc limit ?2", -1, &stmt, NULL) == SQLITE_OK) {
+        if (sqlite3_prepare_v2(db, "select id,bbbb,freq,timestamp,complete,message,age from messages where id > ?1 order by id asc limit ?2", -1, &stmt, NULL) == SQLITE_OK) {
                 sqlite3_bind_int64(stmt, 1, (sqlite3_int64) since_id);
                 sqlite3_bind_int(stmt, 2, limit);
                 while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -503,6 +503,8 @@ char *get_messages_since(unsigned int since_id, int limit) {
                         cJSON_AddStringToObject(m, "received", iso);
                         cJSON_AddBoolToObject(m, "complete", sqlite3_column_type(stmt, 4) == SQLITE_NULL ? 1 : sqlite3_column_int(stmt, 4) != 0);
                         cJSON_AddStringToObject(m, "message", text);
+                        // not yet opened in the web interface
+                        cJSON_AddBoolToObject(m, "unread", sqlite3_column_text(stmt, 6) != NULL && strcmp((const char *) sqlite3_column_text(stmt, 6), "NEW") == 0);
                         cJSON_AddItemToArray(json, m);
                 }
                 sqlite3_finalize(stmt);

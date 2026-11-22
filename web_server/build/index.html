@@ -1,1 +1,102 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"/><link rel="icon" href="./favicon.ico"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#000000"/><meta name="description" content="Web site created using create-react-app"/><link rel="apple-touch-icon" href="./logo192.png"/><link rel="manifest" href="./manifest.json"/><title>NAVTEX</title><script defer="defer" src="./static/js/main.9c22f911.js"></script><link href="./static/css/main.14d2ad44.css" rel="stylesheet"></head><body><noscript>You need to enable JavaScript to run this app.</noscript><div id="root"></div></body></html>
+<!doctype html>
+<!--
+  Navtex · interfaz web (fork EA7JRS/Navtex)
+  SPDX-License-Identifier: MIT
+  Copyright (c) 2026 Manuel - EA7JRS
+  Basado en Navtex, de bartelvdh (MIT). Sin recursos externos: funciona sin Internet.
+-->
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Navtex</title>
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+  <header class="cabecera">
+    <div class="marca">
+      <span class="logo" aria-hidden="true">NTX</span>
+      <div>
+        <h1>Navtex</h1>
+        <p class="sub">518 y 490 kHz</p>
+      </div>
+    </div>
+    <nav class="pestanas" aria-label="Secciones">
+      <button type="button" class="pestana activa" data-vista="mensajes" id="pestana-mensajes">Mensajes <span class="cuenta" id="cuenta-nuevos" hidden></span></button>
+      <button type="button" class="pestana" data-vista="ajustes" id="pestana-ajustes">Estaciones y temas</button>
+      <button type="button" class="pestana" data-vista="acerca" id="pestana-acerca">Acerca de</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="estado" aria-label="Estado del receptor" id="estado">
+      <div class="dato" id="estado-receptor">
+        <span class="etiqueta">Receptor</span>
+        <span class="valor"><span class="punto" id="punto-receptor"></span><span id="texto-receptor">Consultando…</span></span>
+        <span class="detalle" id="detalle-receptor"></span>
+      </div>
+      <div class="dato">
+        <span class="etiqueta">518 kHz · internacional</span>
+        <span class="valor" id="sinc-518">—</span>
+        <span class="detalle">último sincronismo</span>
+      </div>
+      <div class="dato">
+        <span class="etiqueta">490 kHz · nacional</span>
+        <span class="valor" id="sinc-490">—</span>
+        <span class="detalle">último sincronismo</span>
+      </div>
+      <div class="dato">
+        <span class="etiqueta">Hora UTC</span>
+        <span class="valor mono" id="hora-utc">—</span>
+        <span class="detalle" id="total-mensajes"></span>
+      </div>
+    </section>
+
+    <p class="aviso" id="error-general" hidden></p>
+
+    <section id="vista-mensajes" aria-label="Mensajes">
+      <div class="filtros">
+        <div class="grupo" role="group" aria-label="Frecuencia">
+          <button type="button" class="chip activa" data-freq="0" id="freq-todas">Todas</button>
+          <button type="button" class="chip" data-freq="518" id="freq-518">518 kHz</button>
+          <button type="button" class="chip" data-freq="490" id="freq-490">490 kHz</button>
+        </div>
+        <label class="campo">
+          <span class="oculto">Tema</span>
+          <select id="filtro-tema"><option value="">Todos los temas</option></select>
+        </label>
+        <label class="campo crece">
+          <span class="oculto">Buscar en el texto</span>
+          <input type="search" id="filtro-texto" placeholder="Buscar en el texto" autocomplete="off">
+        </label>
+        <label class="casilla"><input type="checkbox" id="filtro-todo"> Ver también lo que no sigo</label>
+      </div>
+      <p class="nota" id="resumen"></p>
+      <ol class="lista" id="lista"></ol>
+      <p class="vacio" id="vacio" hidden></p>
+    </section>
+
+    <section id="vista-ajustes" aria-label="Estaciones y temas" hidden>
+      <p class="nota">Elija de qué estaciones y de qué temas quiere ver mensajes, por separado para cada frecuencia. El receptor guarda todo lo que llega; esto solo decide lo que se muestra.</p>
+      <div class="tarjetas" id="ajustes"></div>
+      <p class="nota">La letra de cada estación depende de la zona (NAVAREA): en la cabecera de cada mensaje, <span class="mono">ZCZC GA12</span>, la primera letra es la estación y la segunda el tema. Los temas A, B, D y L (avisos a los navegantes, avisos meteorológicos y salvamento) no se pueden quitar, como en un receptor NAVTEX homologado.</p>
+      <p class="aviso" id="estado-ajustes" hidden></p>
+    </section>
+
+    <section id="vista-acerca" aria-label="Acerca de" hidden>
+      <div class="tarjeta acerca">
+        <h2>Navtex</h2>
+        <p>Receptor NAVTEX por software para SDRplay y RTL-SDR: escucha 518 y 490 kHz a la vez, en segundo plano, y guarda los mensajes para leerlos cuando haga falta.</p>
+        <p>Navtex · © 2026 Manuel - EA7JRS</p>
+        <p>Basado en <a href="https://github.com/bartelvdh/Navtex" rel="noopener">Navtex</a>, de bartelvdh. Licencia MIT.</p>
+        <p><a href="https://github.com/EA7JRS/Navtex" rel="noopener">github.com/EA7JRS/Navtex</a> · parte del ecosistema APRS LoRa+</p>
+        <p><a class="boton" href="https://paypal.me/ea7jrs" rel="noopener" id="donar">Donar con PayPal</a></p>
+        <p class="nota">Los mensajes se muestran tal como se reciben. Un asterisco (<span class="mono">*</span>) marca un carácter que no se pudo recibir bien. Este programa es una ayuda y no sustituye a un receptor NAVTEX homologado donde este sea obligatorio.</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
