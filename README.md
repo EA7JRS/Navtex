@@ -25,12 +25,12 @@ Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.c
 | Interfaz web | En español o en inglés, adaptada al móvil y sin cargar nada de Internet. Aspecto del sistema, automático por la salida y la puesta del sol, claro, oscuro o de noche (rojo) |
 | Estaciones del mundo | 263 estaciones con letra, posición, horas, alcance e idioma; ordenadas por distancia desde la posición propia |
 | Posición por GPS | Tomada de gpsd; recuadro con la posición junto a la hora |
-| Salida para otros programas | API de solo lectura en JSON; [S.A.T.-APRS+](https://github.com/EA7JRS/sat-aprs) la usa para convertir los mensajes en avisos |
+| Salida para otros programas | API en JSON; [S.A.T.-APRS+](https://github.com/EA7JRS/sat-aprs) la usa para convertir los mensajes en avisos y para manejar el receptor desde su consola |
 | Mensajes incompletos o con errores | Se guardan marcados, con su número de caracteres mal recibidos; una copia mejor sustituye a una peor, nunca al revés |
 | Reglas de un receptor NAVTEX | Recepción buena con menos de un 4 % de errores; cada mensaje se recuerda 72 horas para no repetirlo; los de número 00 se muestran siempre; se comprueba el turno de la letra |
 | Borrar, conservar y guardar | Borrar un mensaje o todos; marcar mensajes para conservarlos siempre; guardar todos en un archivo de texto o CSV; tiempo de conservación ajustable |
 | Alarma de búsqueda y salvamento | Un mensaje del tema D da una alarma, en pantalla y sonora, que solo se apaga a mano |
-| Salida NMEA 0183 | Cada mensaje nuevo en sentencias `NRX` (forma de Furuno o de la norma IEC 61097-6) y la alarma en `ALR`, por UDP y por un servidor TCP |
+| Salida NMEA 0183 | Cada mensaje nuevo en sentencias `NRX` (forma de Furuno o de la norma IEC 61097-6) y la alarma en `ALR`, por UDP y por un servidor TCP. Por TCP admite `ACK` para apagar la alarma y `NRM` para ver y cambiar desde otro equipo las estaciones y temas que se siguen |
 
 ## Estado de las pruebas
 
@@ -42,7 +42,7 @@ Probado el 22-11-2026 en un Intel NUC con Debian 13:
 - la interfaz web desde otros equipos de la red;
 - el descodificador, con dos grabaciones reales de NAVTEX.
 
-Probado el mismo día fuera del NUC, con el programa real y esas grabaciones: las reglas del receptor, el borrado, la exportación, la salida NMEA 0183 por UDP y TCP (sentencias `NRX`, `ALR` y `ACK`) y la alarma de búsqueda y salvamento, esta con un mensaje escrito para la prueba. `make check` repite 87 comprobaciones.
+Probado el mismo día fuera del NUC, con el programa real y esas grabaciones: las reglas del receptor, el borrado, la exportación, la salida NMEA 0183 por UDP y TCP (sentencias `NRX`, `ALR` y `ACK`) y la alarma de búsqueda y salvamento, esta con un mensaje escrito para la prueba. `make check` repite 103 comprobaciones.
 
 **Sin probar todavía:** la recepción de un mensaje completo del aire, una emisión real en 4209,5 kHz, y la salida NMEA 0183 con un plotter. El detalle de cada parte está en el [historial de cambios](CHANGELOG.md).
 
@@ -77,7 +77,7 @@ sudo sh tools/instalar-servicios.sh
 
 `./configure` dice al final qué receptores quedan incluidos (`receivers: SDRplay yes, RTL-SDR yes`); ninguno de los dos es obligatorio. El instalador de servicios toma como usuario el que ejecuta `sudo`, o el que se indique con `--usuario`.
 
-Después abra `http://<equipo>:8080/`. Si hay cortafuegos, abra ese puerto a la red local:
+Después abra `http://<equipo>:8080/`. Si hay cortafuegos, abra ese puerto a la red local (y, si usa la salida NMEA 0183 por TCP, también el puerto que elija para ella):
 
 ```bash
 sudo ufw allow from 192.168.0.0/16 to any port 8080 proto tcp
@@ -106,9 +106,11 @@ Registro en vivo: `journalctl -u 'navtex-receiver@*' -f`
 
 ## La interfaz web
 
-**Idioma.** Español o inglés. De serie, el del navegador; el botón `EN` / `ES` de la cabecera lo cambia y se recuerda en ese navegador. Los mensajes se muestran siempre tal como se reciben.
+La cabecera tiene las tres pestañas (Mensajes, Estaciones y Receptores) y, a la derecha, el botón de aspecto, el de idioma y «Acerca de», con la versión, las normas que sigue y los créditos.
 
-**Aspecto.** El botón de al lado abre el mismo menú que la WebUI del tracker APRS LoRa+:
+**Idioma.** Español o inglés. De serie, el del navegador; el botón `EN` / `ES` lo cambia y se recuerda en ese navegador. Los mensajes se muestran siempre tal como se reciben.
+
+**Aspecto.** Su botón abre el mismo menú que la WebUI del tracker APRS LoRa+:
 
 ![El menú de aspecto](docs/img/aspecto.png)
 
@@ -121,7 +123,11 @@ Registro en vivo: `journalctl -u 'navtex-receiver@*' -f`
 
 ### Mensajes
 
-Lista con el tema en claro, la primera línea del texto, la estación, la frecuencia y hace cuánto llegó. El color indica la importancia: salvamento, aviso meteorológico, aviso a los navegantes. Hay marcas de «nuevo» y de «cortado», filtros por frecuencia y por tema, y búsqueda en el texto. Un asterisco en el texto es un carácter que no se pudo recibir bien.
+Lista con el tema en claro, la primera línea del texto, la estación, la frecuencia y hace cuánto llegó. El color indica la importancia: salvamento, aviso meteorológico, aviso a los navegantes. Hay marcas de «nuevo», «conservado», «cortado» y «con errores», filtros por frecuencia y por tema, y búsqueda en el texto. Un asterisco en el texto es un carácter que no se pudo recibir bien.
+
+Al abrir un mensaje se ve el texto entero y, debajo, cuándo se recibió, si la estación lo sigue emitiendo, qué estación lo mandó (por su letra y su hora), cuántos caracteres llegaron mal y si llegó fuera de su turno. Dos botones: **Conservar siempre** y **Borrar este mensaje**. Debajo de la lista: **Guardar todos como texto**, **Guardar todos como CSV** y **Borrar todos**.
+
+Un mensaje de búsqueda y salvamento (tema D) pone arriba un aviso rojo, con pitido, hasta que se pulsa **Reconocer la alarma**.
 
 ### Estaciones
 
@@ -138,7 +144,7 @@ En la cabecera de cada mensaje, `ZCZC GA12`, la primera letra es la estación y 
 
 ![Los dos receptores, con la banda por horario](docs/img/receptores.png)
 
-Para cada uno de los dos receptores: encendido, equipo, banda y los ajustes del equipo. El receptor aplica los cambios en unos segundos.
+Para cada uno de los dos receptores: encendido, equipo, banda y los ajustes del equipo. El receptor aplica los cambios en unos segundos. Debajo, **Mensajes: conservación y salida NMEA**: las horas que se conserva un mensaje, el destino UDP, el puerto del servidor TCP y la forma de la sentencia `NRX`.
 
 | Banda | Qué escucha |
 | :--- | :--- |
