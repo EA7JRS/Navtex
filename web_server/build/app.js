@@ -194,6 +194,24 @@
     });
     return mejor;
   }
+  // Onda corta (4209,5 kHz): predicción de VOACAP, que da Wefax si está en este mismo equipo (puerto 8081).
+  // Si no está, o no tiene VOACAP, no se enseña nada. En 518 y 490 kHz no vale: VOACAP empieza en 2 MHz.
+  var voacap = {}, voacapPedido = {};
+  function pedirVoacap(e) {
+    var clave = e.nombre + e.letra, p = posicion();
+    if (e.khz !== 4209 || e.lat === null || !p || voacapPedido[clave] > Date.now() - 3600000) return;
+    voacapPedido[clave] = Date.now();
+    fetch('http://' + location.hostname + ':8081/api/voacap?lat=' + e.lat + '&lon=' + e.lon + '&khz=4209.5&kw=5', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (j && j.ok && j.rel && j.rel[0]) { voacap[clave] = j; pintarAjustes(); } })
+      .catch(function () { /* sin Wefax: nada */ });
+  }
+  function textoVoacap(e, ms) {
+    var j = voacap[e.nombre + e.letra], r;
+    if (!j || ms === null) return '';
+    r = j.rel[0][new Date(ms).getUTCHours()];
+    return typeof r === 'number' ? tr(' · VOACAP: llega el ') + Math.round(r * 100) + tr(' % de los días a esa hora') : '';
+  }
   // Boletín meteorológico: en qué turnos lo emite la estación (dato del IHM; vacío si no se sabe)
   function llevaMeteo(e, ms) {
     var d = new Date(ms);
@@ -458,10 +476,12 @@
           li.appendChild(nombre);
           li.appendChild(crear('span', 'dist', x.d === null ? '' : Math.round(x.d) + tr(' mn')));
           var px = proxima(e, ahora);
+          pedirVoacap(e);
           li.appendChild(crear('span', 'mas', e.pais
             + (e.alcance !== null ? tr(' · alcance ') + e.alcance + tr(' mn') : '')
             + (e.idioma ? ' · ' + (IDIOMAS[e.idioma] ? tr(IDIOMAS[e.idioma]) : e.idioma) : '')
             + (px !== null ? tr(' · próxima ') + horaUtc(px) + ' UTC' + (llevaMeteo(e, px) ? tr(' (con boletín meteorológico)') : '') : '')
+            + textoVoacap(e, px)
             + textoMeteo(e)
             + (e.mmsi ? ' · MMSI ' + e.mmsi : '')
             + (e.nota ? ' · ' + e.nota : '')

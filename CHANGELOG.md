@@ -2,6 +2,12 @@
 
 Fork EA7JRS/Navtex del receptor NAVTEX de bartelvdh. Las entradas dicen también qué se probó y qué no. Lo descrito en una fase puede haber cambiado en las posteriores (por ejemplo, los servicios y sus ajustes): el estado actual es el del [README](README.md).
 
+## [1.7.2] - 2026-11-22
+
+- **Predicción de onda corta para 4209,5 kHz**: si [Wefax](https://github.com/EA7JRS/Wefax) 0.3.0 está en el mismo equipo (puerto 8081) con VOACAP instalado, cada estación de 4209,5 kHz dice qué parte de los días del mes llega a la hora de su próxima emisión. Se suponen 5 kW (la potencia no está publicada). En 518 y 490 kHz no se aplica: VOACAP empieza en 2 MHz. Sin Wefax no cambia nada.
+- La página puede consultar el puerto 8081 (`connect-src` de la política de seguridad de contenido).
+- Probado en el PC con Wefax y voacapl reales; sin probar en el equipo.
+
 ## [1.7.1] - 2026-11-22
 
 - **Estaciones comprobadas con «Radioseñales» 2023 del Instituto Hidrográfico de la Marina**: 52 emisiones de las NAVAREA II y III. Cross Corsen (518 y 490 kHz) pasa a inactiva; alcances corregidos donde el IHM da otro que la UIT de 2017 (la nota de cada estación lo dice); cada estación comprobada dice en qué turnos emite el boletín meteorológico y el MMSI de su centro. La lista de «próximas emisiones» marca las que llevan boletín. Solo datos sueltos (`tools/estaciones/ihm_2023.csv`): la publicación es © IHM y no se copia.

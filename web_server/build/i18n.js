@@ -9,6 +9,8 @@
 window.NAVTEX_I18N = (function () {
   'use strict';
   var EN = {
+ " · VOACAP: llega el ": " · VOACAP: it arrives on ",
+ " % de los días a esa hora": " % of the days at that hour",
  " (con boletín meteorológico)": " (with weather bulletin)",
  " · boletín meteorológico en todos los turnos": " · weather bulletin in every slot",
  " · boletín meteorológico a las ": " · weather bulletin at ",

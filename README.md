@@ -393,6 +393,8 @@ sudo systemctl start gpsd.socket gpsd
 
 Los datos de origen están en `tools/estaciones/`, y `python3 tools/estaciones/generar.py` los comprueba y genera el archivo. En NAVTEX la letra fija la hora de emisión; de las 257 estaciones de la UIT, 254 cumplen esa regla, y las otras tres se listan al generar.
 
+**Onda corta (4209,5 kHz).** Si [Wefax](https://github.com/EA7JRS/Wefax) está en el mismo equipo con VOACAP instalado, cada estación de 4209,5 kHz dice además qué parte de los días del mes llega su señal a la hora de la próxima emisión (predicción de VOACAP, mediana del mes, con 5 kW supuestos). En 518 y 490 kHz no hay predicción: ahí cuenta el alcance en millas.
+
 **Comprobación con Radioseñales 2023.** De esa publicación solo se toman datos sueltos, cotejados uno a uno (`tools/estaciones/ihm_2023.csv`); es © IHM y no se copia. Donde difiere de la UIT manda ella, por ser más reciente, y la nota de la estación lo dice: Cross Corsen (518 y 490 kHz) figura inactiva, y cambian los alcances de Split, Kosseir, Piombino, las estaciones griegas, turcas y ucranianas. Las estaciones comprobadas dicen a qué horas emiten el boletín meteorológico (Tarifa: 09:00 y 21:00 UTC en 518 kHz; 11:10 y 23:10 en 490 kHz). Las horas de los boletines se sacaron de sus tablas con un programa y se revisaron a ojo las españolas; no se pudieron sacar las de Grecia, La Garde en 518 kHz, Kosseir ni Novorossiysk.
 
 **Los datos de 518 y 490 kHz de la UIT son de 2017 y los del IHM de 2023: pueden haber cambiado.** Sirven para orientarse; compruébelos con las publicaciones oficiales en vigor.

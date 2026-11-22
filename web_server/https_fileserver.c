@@ -472,7 +472,8 @@ http_ahc (void *cls,
   MHD_add_response_header (response, "Content-Type", content_type_of (path));
   MHD_add_response_header (response, "X-Content-Type-Options", "nosniff");
   /* The GUI only uses its own files: nothing received by radio can load or run anything else */
-  MHD_add_response_header (response, "Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'");
+  /* the page may also ask Wefax (port 8081 of the same machine) for the short wave prediction of 4209.5 kHz */
+  MHD_add_response_header (response, "Content-Security-Policy", "default-src 'self'; connect-src 'self' http://*:8081; frame-ancestors 'none'");
   MHD_add_response_header (response, "Cache-Control", "no-cache");
   ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
   MHD_destroy_response (response);
