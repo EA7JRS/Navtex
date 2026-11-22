@@ -5,7 +5,7 @@
  * Copyright (c) 2026 Manuel - EA7JRS (fork EA7JRS/Navtex). See COPYING.md.
  *
  * NAVTEX has no standard NMEA 2000 message; its standard output is the NRX
- * sentence of NMEA 0183 / IEC 61162-1 (IMO MSC.148(77), 9: "at least one
+ * sentence of NMEA 0183 / IEC 61162-1 (IMO MSC.508(105), 9: "at least one
  * interface for the transfer of received data to other navigation or
  * communication equipment"). The sentences go out by UDP and to the clients
  * of a small TCP server. The only thing taken from those clients is the ACK

@@ -80,7 +80,7 @@ main (void)
        "insert into config (tag,value) values ('stations518','ABCDEFGHIJKLMNOPQRSTUVWXYZ'),('messages518','ABCDEFL'),"
        "('stations490','ABCDEFGHIJKLMNOPQRSTUVWXYZ'),('messages490','ABCDEFL');");
 
-  /* --- character error rate below 4 % (IMO MSC.148(77), 6.2.3) */
+  /* --- character error rate below 4 % (IMO MSC.508(105), 6.2.3) */
   CHECK (satisfactorily_received (1, 3, 100), "3 % is satisfactory");
   CHECK (!satisfactorily_received (1, 4, 100), "4 % is not");
   CHECK (!satisfactorily_received (0, 0, 100), "a cut message is not");
@@ -270,6 +270,44 @@ main (void)
     CHECK (checksum_ok (alr), "ALR checksum");
     CHECK (is_alarm_ack ("$IIACK,003*56\r\n") && !is_alarm_ack ("$IIACK,003*00\r\n") && !is_alarm_ack ("$IIACK,004*51\r\n") && !is_alarm_ack ("ACK,003") && !is_alarm_ack (""), "ACK sentence");
   }
+  /* --- tagged for permanent retention (IMO MSC.508(105), 6.1.2) */
+  add_message ("GA40", "ZCZC GA40\nTEST. KEEP THIS ONE.\n", 518, 1);
+  m = listed ("GA40", &j); i = cJSON_GetObjectItem (m, "id")->valueint; cJSON_Delete (j);
+  CHECK (set_keep ((unsigned int) i, 1) == 0 && set_keep (999999, 1) == -1, "tagged");
+  m = listed ("GA40", &j);
+  CHECK (m != NULL && cJSON_IsTrue (cJSON_GetObjectItem (m, "keep")), "and says so");
+  cJSON_Delete (j);
+  sql ("update messages set heard = strftime('%s','now') - 400*3600, timestamp = strftime('%Y-%m-%d %H:%M', 'now', '-400 hours') where bbbb = 'GA40'");
+  purge_old_messages ();
+  CHECK (listed ("GA40", &j) != NULL, "a tagged message is not purged"); cJSON_Delete (j);
+  add_message ("GA40", "ZCZC GA40\nTEST. ANOTHER MESSAGE WITH THE SAME NUMBER, WEEKS LATER.\n", 518, 1);
+  s = export_messages (0, 518);
+  CHECK (s != NULL && strstr (s, "KEEP THIS ONE") != NULL && strstr (s, "WEEKS LATER") != NULL, "a later message with the same number does not replace it");
+  free (s);
+  n = count_listed ();
+  CHECK (delete_messages (0) >= 1 && count_listed () == 1, "delete all leaves what is tagged");
+  CHECK (delete_messages ((unsigned int) i) == 1 && count_listed () == 0, "one by one it can be deleted");
+  for (n = 0; n < 51; n++)
+    {
+      char id[8], body[40];
+      snprintf (id, sizeof (id), "H%c%02d", 'A' + n / 26, n);
+      snprintf (body, sizeof (body), "ZCZC %s\nTEST %d.\n", id, n);
+      add_message (id, body, 490, 1);
+    }
+  {
+    char *ml = get_messages_since (0, 500);
+    cJSON *all = cJSON_Parse (ml), *e;
+    int ok = 0, refused = 0;
+    cJSON_ArrayForEach (e, all)
+      {
+        int rc = set_keep ((unsigned int) cJSON_GetObjectItem (e, "id")->valueint, 1);
+        if (rc == 0) ok++; else if (rc == -3) refused++;
+      }
+    CHECK (ok == 50 && refused == 1, "at most 50 tagged: a quarter of the 200 of the standard");
+    cJSON_Delete (all);
+    free (ml);
+  }
+
   CHECK (set_setting ("nrx.format", "iec") == 0 && set_setting ("nrx.format", "furuno") == 0 && set_setting ("nrx.format", "x") != 0, "NRX form");
 
   unlink (DATA_FILE);

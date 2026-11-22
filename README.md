@@ -28,7 +28,7 @@ Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.c
 | Salida para otros programas | API de solo lectura en JSON; [S.A.T.-APRS+](https://github.com/EA7JRS/sat-aprs) la usa para convertir los mensajes en avisos |
 | Mensajes incompletos o con errores | Se guardan marcados, con su número de caracteres mal recibidos; una copia mejor sustituye a una peor, nunca al revés |
 | Reglas de un receptor NAVTEX | Recepción buena con menos de un 4 % de errores; cada mensaje se recuerda 72 horas para no repetirlo; los de número 00 se muestran siempre; se comprueba el turno de la letra |
-| Borrar y guardar | Borrar un mensaje o todos; guardar todos en un archivo de texto o CSV; tiempo de conservación ajustable |
+| Borrar, conservar y guardar | Borrar un mensaje o todos; marcar mensajes para conservarlos siempre; guardar todos en un archivo de texto o CSV; tiempo de conservación ajustable |
 | Alarma de búsqueda y salvamento | Un mensaje del tema D da una alarma, en pantalla y sonora, que solo se apaga a mano |
 | Salida NMEA 0183 | Cada mensaje nuevo en sentencias `NRX` (forma de Furuno o de la norma IEC 61097-6) y la alarma en `ALR`, por UDP y por un servidor TCP |
 
@@ -234,6 +234,7 @@ Para que otro programa recoja los mensajes por la red. Todo en JSON y con las ho
 | `GET /api/export?format=txt` o `csv`, y `&freq=518`, `490` o `4209` | Todos los mensajes en un archivo |
 | `GET /api/nrx` | Estado de la salida NMEA 0183 |
 | `POST /api/alarm/ack` | Reconoce la alarma de búsqueda y salvamento |
+| `POST /api/messages/keep/<id>/1` o `/0` | Marca un mensaje para conservarlo siempre, o quita la marca |
 | `POST /api/messages/delete/<id>` o `/all` | Borra un mensaje o todos |
 
 ```json
@@ -253,26 +254,28 @@ Los cambios (`/api/settings/<clave>/<valor>`, `/saveconfig/<ajuste>/<valor>`, `/
 
 El detalle, norma por norma y apartado por apartado, con lo que se aplica y lo que no, está en **[docs/NORMAS.md](docs/NORMAS.md)**.
 
-El programa sigue lo que piden a un receptor la resolución MSC.148(77) de la OMI y el Manual NAVTEX, y las características de la Recomendación UIT-R M.540 (impresión directa de banda estrecha con corrección de errores, modo B colectivo: 100 baudios y 170 Hz de desplazamiento).
+El programa sigue lo que piden a un receptor la resolución MSC.508(105) de la OMI (la vigente, para equipos instalados desde 2024; antes, la MSC.148(77)) y el Manual NAVTEX en su edición de 2023, y las características de la Recomendación UIT-R M.540 (impresión directa de banda estrecha con corrección de errores, modo B colectivo: 100 baudios y 170 Hz de desplazamiento).
 
 | Regla | Cómo se aplica |
 | :--- | :--- |
-| Un mensaje se da por bien recibido con menos de un 4 % de caracteres erróneos (MSC.148(77), 6.2.3) | Se cuentan los caracteres que no se pudieron recibir. Solo un mensaje completo y por debajo del 4 % impide que se guarde su repetición |
-| La identidad de un mensaje (B1B2B3B4) se recuerda de 60 a 72 horas (MSC.148(77), 6.2.2) | 72 horas. En ese tiempo, la repetición no vuelve a aparecer como nueva; después, sí |
+| Un mensaje se da por bien recibido con menos de un 4 % de caracteres erróneos (MSC.508(105), 6.2.3) | Se cuentan los caracteres que no se pudieron recibir. Solo un mensaje completo y por debajo del 4 % impide que se guarde su repetición |
+| La identidad de un mensaje (B1B2B3B4) se recuerda de 60 a 72 horas (MSC.508(105), 6.2.2) | 72 horas. En ese tiempo, la repetición no vuelve a aparecer como nueva; después, sí |
 | Un mensaje mal recibido no se recuerda | Si la estación lo repite mejor, la copia nueva sustituye a la anterior |
 | Los mensajes con B3B4 = 00 se muestran siempre (UIT-R M.540, Manual NAVTEX 5.4.3) | Se guardan cada vez, y la interfaz los enseña aunque no se siga esa estación o ese tema |
 | Los temas A, B, D y L no se pueden rechazar (Manual NAVTEX 5.3.4) | En la interfaz no se pueden desmarcar |
-| El carácter mal recibido se marca con un asterisco (MSC.148(77), 5.7) | Así se guarda y así se muestra |
+| El carácter mal recibido se marca con un asterisco (MSC.508(105), 5.7) | Así se guarda y así se muestra |
 | Cada letra B1 tiene diez minutos cada cuatro horas: A a las 0000, B a las 0010… X a las 0350 (Manual NAVTEX, tabla 2) | Cada mensaje dice si llegó en el turno de su letra, y con la hora se averigua cuál de las estaciones que comparten letra lo emitió |
-| Memoria para al menos 200 mensajes (MSC.148(77), 6.1.1) | Sin límite de número; se borran al cumplir el tiempo de conservación sin volver a oírse |
-| Una interfaz para pasar los datos a otros equipos, según IEC 61162 (MSC.148(77), 9) | Sentencias `NRX` de NMEA 0183 |
+| Memoria para al menos 200 mensajes (MSC.508(105), 6.1.1) | Sin límite de número; se borran al cumplir el tiempo de conservación sin volver a oírse |
+| Una interfaz para pasar los datos a otros equipos, según IEC 61162 (MSC.508(105), 9) | Sentencias `NRX` de NMEA 0183 |
 
-| La información de búsqueda y salvamento (B2 = D) da una alarma que solo se puede apagar a mano (MSC.148(77), 7.1; IEC 61097-6, 4.3.9) | Aviso rojo arriba de la interfaz, con pitido, hasta que se pulsa «Reconocer la alarma». El mensaje se muestra aunque no se siga esa estación. La repetición del mismo mensaje no la vuelve a disparar |
+| La información de búsqueda y salvamento (B2 = D) da una alarma que solo se puede apagar a mano (MSC.508(105), 7; IEC 61097-6, 4.3.9) | Aviso rojo arriba de la interfaz, con pitido, hasta que se pulsa «Reconocer la alarma». El mensaje se muestra aunque no se siga esa estación. La repetición del mismo mensaje no la vuelve a disparar |
 | La alarma se comunica con la sentencia `ALR`, cada 30 segundos hasta que se reconoce, y se puede reconocer con `ACK` (IEC 61097-6, 4.3.9.2, 4.3.9.3 y 8.4.2) | Por la salida NMEA 0183: alarma número 003 |
 
 El pitido depende del navegador: la mayoría no deja sonar una página hasta que se ha tocado alguna vez, y no llega a los 75–85 dBA que pide la norma para un equipo de puente. Este programa no está homologado ni sustituye a un receptor que lo esté.
 
-**Borrar.** Un mensaje borrado deja de verse, pero su identidad se sigue recordando hasta 72 horas: la repetición de la estación no lo trae de vuelta.
+**Conservar.** Un mensaje marcado con «Conservar siempre» no se borra al cumplir el tiempo de conservación, ni lo sustituye otro posterior con el mismo número. Hasta 50 (MSC.508(105), 6.1.2). «Borrar todos» los respeta.
+
+**Borrar.** La norma dice que el usuario no debe poder borrar mensajes (MSC.508(105), 6.1.1); este programa lo permite porque es una ayuda y no el receptor obligatorio. Un mensaje borrado deja de verse, pero su identidad se sigue recordando hasta 72 horas: la repetición de la estación no lo trae de vuelta.
 
 **Conservación.** De serie, un mensaje se borra a las 72 horas de la última vez que se oyó. Se puede alargar hasta un año (pestaña Receptores). Mientras la estación lo siga emitiendo, no se borra.
 
@@ -346,4 +349,5 @@ Si te resulta útil: [paypal.me/ea7jrs](https://paypal.me/ea7jrs)
 
 ## Previsto
 
+- Las sentencias de gestión de alertas del puente (MSC.508(105), 9.4; IEC 62923).
 - La sentencia `NRM` de IEC 61097-6 (elegir estaciones y temas desde otro equipo).

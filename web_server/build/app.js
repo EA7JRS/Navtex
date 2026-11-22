@@ -330,6 +330,7 @@
       boton.appendChild(crear('span', 'cab mono ' + (GRAVEDAD[m.subject] || ''), m.bbbb));
       var titulo = crear('span', 'titulo', TEMAS[m.subject] || tr('Tema ') + m.subject);
       if (m.unread) titulo.appendChild(crear('span', 'marca-nuevo', tr('nuevo')));
+      if (m.keep) titulo.appendChild(crear('span', 'marca-nuevo', tr('conservado')));
       boton.appendChild(titulo);
       boton.appendChild(crear('span', 'flecha', '›'));
       var meta = crear('span', 'meta');
@@ -352,9 +353,21 @@
           + (oido ? tr(' La estación lo sigue emitiendo: oído por última vez ') + haceCuanto(oido, ahora) + '.' : '')
           + (est ? (est.porTurno ? tr(' Por la letra y la hora, lo emitió ') + est.nombre + '.' : tr(' La estación ') + m.station + tr(' más cercana en esa frecuencia es ') + est.nombre + '.') : '')
           + (m.in_slot === false ? tr(' Llegó fuera del turno de la letra ') + m.station + tr(': puede ser una estación lejana con otro horario.') : '')
+          + (m.keep ? tr(' Marcado para conservarlo: no se borra al cumplir el tiempo de conservación.') : '')
           + (m.complete ? '' : tr(' La recepción se cortó antes del final del mensaje.'))
           + (malos ? ' ' + malos + (malos === 1 ? tr(' carácter no se pudo recibir bien (el asterisco): ') : tr(' caracteres no se pudieron recibir bien (los asteriscos): ')) + tasa + ' %.' : '')
           + (m.satisfactory === false && m.complete ? tr(' Con un 4 % o más de errores la recepción no se da por buena: si la estación lo repite mejor, la copia nueva sustituye a esta.') : '')));
+        var bk = crear('button', 'boton pequeno', m.keep ? tr('Dejar de conservar') : tr('Conservar siempre'));
+        bk.type = 'button'; bk.id = 'conservar-' + m.id;
+        bk.addEventListener('click', function () {
+          enviar('/api/messages/keep/' + m.id + '/' + (m.keep ? '0' : '1')).then(leerTodo).catch(function (e) {
+            var error = $('error-general');
+            error.hidden = false;
+            error.textContent = e.message.indexOf('409') >= 0 ? tr('Ya hay 50 mensajes conservados: deje de conservar alguno.') : tr('No se pudo guardar: ') + e.message + '.';
+          });
+        });
+        cuerpo.appendChild(bk);
+        cuerpo.appendChild(document.createTextNode(' '));
         var bb = crear('button', 'boton pequeno', tr('Borrar este mensaje'));
         bb.type = 'button'; bb.id = 'borrar-' + m.id;
         bb.addEventListener('click', function () { borrar(m.id); });
@@ -836,7 +849,7 @@
     });
   });
   $('borrar-todos').addEventListener('click', function () {
-    if (window.confirm(tr('¿Borrar todos los mensajes guardados? Los que las estaciones repitan en las próximas 72 horas no volverán a aparecer.'))) borrar('all');
+    if (window.confirm(tr('¿Borrar todos los mensajes guardados, salvo los conservados? Los que las estaciones repitan en las próximas 72 horas no volverán a aparecer.'))) borrar('all');
   });
 
   // Aspecto: botón con menú, como en la WebUI del tracker APRS LoRa+. Los iconos son de Bootstrap Icons (MIT).

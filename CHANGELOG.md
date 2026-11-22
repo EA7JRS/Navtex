@@ -2,6 +2,18 @@
 
 Fork EA7JRS/Navtex del receptor NAVTEX de bartelvdh. Las entradas dicen también qué se probó y qué no. Lo descrito en una fase puede haber cambiado en las posteriores (por ejemplo, los servicios y sus ajustes): el estado actual es el del [README](README.md).
 
+## [1.5.0] - 2026-11-22
+
+### Normas al día: MSC.508(105) y Manual NAVTEX de 2023
+
+- Se han comprobado las ediciones vigentes de las normas. La norma de funcionamiento de la OMI vigente es la **MSC.508(105)**, de 2022, para equipos instalados desde el 1 de enero de 2024; sustituye a la MSC.148(77), que era la aplicada hasta ahora. El Manual NAVTEX vigente es la edición de 2023 (MSC.1/Circ.1403/Rev.2). La UIT-R M.540-2 sigue en vigor.
+- **Conservar siempre.** Nuevo, por MSC.508(105), 6.1.2: cada mensaje se puede marcar para conservarlo. No se borra al cumplir el tiempo de conservación ni lo sustituye otro posterior con el mismo número; «Borrar todos» lo respeta. Hasta 50 mensajes.
+- `docs/NORMAS.md` cita ya la norma vigente, tiene una tabla de ediciones (la vigente y la que se ha leído) y dice lo que no se cumple: el borrado de mensajes, que la norma no permite; la gestión de alertas del puente; la recepción por HF más allá de 4209,5 kHz.
+- No se han podido consultar las enmiendas de 2011 y 2019 de IEC 61097-6, que son de pago: las sentencias `NRX`, `ALR` y `ACK` son las de la edición de 2005.
+- `make check`: 94 comprobaciones.
+
+---
+
 ## [1.4.0] - 2026-11-22
 
 ### Interfaz en español e inglés, y selector de aspecto como el de APRS LoRa+

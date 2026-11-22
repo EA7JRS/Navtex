@@ -378,6 +378,29 @@ http_ahc (void *cls,
       snprintf (answer, sizeof (answer), "{\"deleted\":%d}", n);
       return send_text (connection, MHD_HTTP_OK, answer, "application/json", 0);
   }
+  if (strncmp (url, "/api/messages/keep/", 19) == 0)
+  {
+      /* POST /api/messages/keep/<id>/<0|1> : tag a message for permanent retention, or remove the tag */
+      const char *what = url + 19;
+      unsigned long m_id;
+      char *end;
+      int rc;
+
+      if (0 != strcmp (method, MHD_HTTP_METHOD_POST) || !is_own_request (connection))
+        return send_text (connection, MHD_HTTP_FORBIDDEN, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+      errno = 0;
+      m_id = strtoul (what, &end, 10);
+      if (!isdigit ((unsigned char) what[0]) || errno != 0 || m_id == 0 || m_id > 0x7fffffffUL || end[0] != '/' || (end[1] != '0' && end[1] != '1') || end[2] != '\0')
+        return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+      rc = set_keep ((unsigned int) m_id, end[1] == '1');
+      if (rc == -3)
+        return send_text (connection, MHD_HTTP_CONFLICT, "{\"error\":\"too many kept messages\"}", "application/json", 0);
+      if (rc == -1)
+        return send_text (connection, MHD_HTTP_NOT_FOUND, "{\"error\":\"no such message\"}", "application/json", 0);
+      if (rc != 0)
+        return send_text (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, ERROR_JSON, "application/json", 0);
+      return send_text (connection, MHD_HTTP_OK, "{}", "application/json", 0);
+  }
   if (strcmp (url, "/api/alarm/ack") == 0)
   {
       /* POST: the operator resets the search and rescue alarm */

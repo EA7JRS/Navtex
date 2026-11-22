@@ -16,7 +16,8 @@ int navtex_verbose = 1;
 int navtex_hf = 0;
 static int schema_checked = 0;
 
-#define IDENTITY_MEMORY_AGE (60*60*72)			// a message identity is remembered 72 hours (IMO MSC.148(77), 6.2.2: 60 to 72)
+#define MAX_KEPT_MESSAGES 50				// 25 % of the 200 messages of the standard (IMO MSC.508(105), 6.1.2)
+#define IDENTITY_MEMORY_AGE (60*60*72)			// a message identity is remembered 72 hours (IMO MSC.508(105), 6.2.2: 60 to 72)
 #define MESSAGE_WEAHTER_FCST_AGE_LIMIT 60*60*28  	//28 hours in seconds mark weather fcsts as old when reaching this age
 
 
@@ -79,6 +80,8 @@ void open_db(sqlite3 **db) {
                 sqlite3_exec(*db, "alter table messages add column heard integer", NULL, NULL, NULL);
                 // alarm: 1 while a search and rescue message (B2 = D) waits to be acknowledged by hand
                 sqlite3_exec(*db, "alter table messages add column alarm integer default 0", NULL, NULL, NULL);
+                // keep: 1 when the user tagged the message for permanent retention (IMO MSC.508(105), 6.1.2)
+                sqlite3_exec(*db, "alter table messages add column keep integer default 0", NULL, NULL, NULL);
                 sqlite3_exec(*db, "create table if not exists status (tag text primary key, value text)", NULL, NULL, NULL);
                 sqlite3_exec(*db, "create table if not exists settings (tag text primary key, value text)", NULL, NULL, NULL);
                 // Receiver 1 keeps doing what a fresh install did; receiver 2 waits to be switched on
@@ -112,7 +115,7 @@ static int valid_config(const char *tag, const char *value) {
 
 // ---------------------------------------------------------------------------
 // What a NAVTEX receiver does with a message it has already received
-// (IMO MSC.148(77), 6.2; NAVTEX Manual, 6.2 and 7.5):
+// (IMO MSC.508(105), 6.2; NAVTEX Manual, 6.2 and 7.5):
 //  - a message is "satisfactorily received" when its character error rate is
 //    below 4 %; only then is its identity B1B2B3B4 remembered;
 //  - an identity is remembered for 60 to 72 hours: a repeat of the broadcast
@@ -170,6 +173,7 @@ int add_message(char *bbbb, char *message, int freq, int complete) {
         sqlite3_stmt *stmt;
         int rc;
         int keep_existing = 0;
+        int carry_keep = 0;      // the stored copy was tagged for retention and this one replaces it
         int errors, length;
         const char *name = freq == 4209 ? "4209.5" : freq == 518 ? "518" : "490";
 
@@ -187,7 +191,7 @@ int add_message(char *bbbb, char *message, int freq, int complete) {
         }
 
         // What is already stored for this message identity on this frequency?
-        if (sqlite3_prepare_v2(db, "select complete, length(message), timestamp, coalesce(errors,0), id from messages where bbbb = ?1 and freq = ?2 order by id desc limit 1", -1, &stmt, NULL) == SQLITE_OK) {
+        if (sqlite3_prepare_v2(db, "select complete, length(message), timestamp, coalesce(errors,0), id, coalesce(keep,0) from messages where bbbb = ?1 and freq = ?2 order by id desc limit 1", -1, &stmt, NULL) == SQLITE_OK) {
                 sqlite3_bind_text(stmt, 1, bbbb, -1, SQLITE_STATIC);
                 sqlite3_bind_int(stmt, 2, freq);
                 if (sqlite3_step(stmt) == SQLITE_ROW && sqlite3_column_text(stmt, 2) != NULL) {
@@ -198,6 +202,9 @@ int add_message(char *bbbb, char *message, int freq, int complete) {
                         long age = calculate_time_difference((char *) sqlite3_column_text(stmt, 2));
                         int always = bbbb[2] == '0' && bbbb[3] == '0';       // B3B4 = 00: always shown
 
+                        // Within the time its identity is remembered it is the same message: a better copy
+                        // inherits the tag. Later, the number has been used again for another message.
+                        if (age < IDENTITY_MEMORY_AGE) carry_keep = sqlite3_column_int(stmt, 5);
                         if (age < IDENTITY_MEMORY_AGE && !always) {
                                 if (satisfactorily_received(old_complete, old_errors, old_len)) keep_existing = 1;          // a repeat of the broadcast
                                 else if (!better_copy(complete, errors, length, old_complete, old_errors, old_len)) keep_existing = 1;
@@ -220,13 +227,15 @@ int add_message(char *bbbb, char *message, int freq, int complete) {
                 return 0;
         }
 
-	sqlite3_prepare_v2(db, "delete from messages where bbbb = ?1 and freq = ?2", -1, &stmt, NULL);
+	// What the user tagged for retention is never replaced by a later message with the same number
+	sqlite3_prepare_v2(db, "delete from messages where bbbb = ?1 and freq = ?2 and (coalesce(keep,0) = 0 or ?3 = 1)", -1, &stmt, NULL);
         sqlite3_bind_text(stmt, 1, bbbb, -1, SQLITE_STATIC);
         sqlite3_bind_int(stmt, 2, freq);
+        sqlite3_bind_int(stmt, 3, carry_keep ? 1 : 0);
 	sqlite3_step(stmt); 
         sqlite3_finalize(stmt);
 
-	sqlite3_prepare_v2(db, "insert into messages (bbbb,message,timestamp,age,freq,complete,errors,deleted,heard,alarm) values ( ?1 , ?2 , ?3 ,'NEW',?4,?5,?6,0,strftime('%s','now'),?7)", -1, &stmt, NULL);
+	sqlite3_prepare_v2(db, "insert into messages (bbbb,message,timestamp,age,freq,complete,errors,deleted,heard,alarm,keep) values ( ?1 , ?2 , ?3 ,'NEW',?4,?5,?6,0,strftime('%s','now'),?7,?8)", -1, &stmt, NULL);
         sqlite3_bind_text(stmt, 1, bbbb,          -1, SQLITE_STATIC);
         sqlite3_bind_text(stmt, 2, message,       -1, SQLITE_STATIC);
         sqlite3_bind_text(stmt, 3, timestamp_str, -1, SQLITE_STATIC);
@@ -234,8 +243,9 @@ int add_message(char *bbbb, char *message, int freq, int complete) {
         sqlite3_bind_int(stmt, 5, complete ? 1 : 0);
         sqlite3_bind_int(stmt, 6, errors);
         // Search and rescue information gives an alarm that can only be reset by hand
-        // (IMO MSC.148(77), 7.1; IEC 61097-6, 4.3.9)
+        // (IMO MSC.508(105), 7; IEC 61097-6, 4.3.9)
         sqlite3_bind_int(stmt, 7, bbbb[1] == 'D' ? 1 : 0);
+        sqlite3_bind_int(stmt, 8, carry_keep ? 1 : 0);
         rc = sqlite3_step(stmt);
         sqlite3_finalize(stmt);
 	sqlite3_close(db);
@@ -395,7 +405,7 @@ void purge_old_messages() {
 		return;
         }
         if (sqlite3_prepare_v2(db, "delete from messages where"
-                                   " (strftime('%s','now') - coalesce(heard, strftime('%s', timestamp))) > ?1"
+                                   " ((strftime('%s','now') - coalesce(heard, strftime('%s', timestamp))) > ?1 and coalesce(keep,0) = 0)"
                                    " or (coalesce(deleted,0) = 1 and (strftime('%s','now') - strftime('%s', timestamp)) > ?2)", -1, &stmt, NULL) == SQLITE_OK) {
                 sqlite3_bind_int64(stmt, 1, (sqlite3_int64) keep);
                 sqlite3_bind_int64(stmt, 2, (sqlite3_int64) IDENTITY_MEMORY_AGE);
@@ -414,14 +424,41 @@ int delete_messages(unsigned int id) {
 
         open_db(&db);
         if (db == NULL) return -1;
-        if (sqlite3_prepare_v2(db, id ? "update messages set deleted = 1, alarm = 0, age = '' where id = ?1 and coalesce(deleted,0) = 0"
-                                      : "update messages set deleted = 1, alarm = 0, age = '' where coalesce(deleted,0) = 0", -1, &stmt, NULL) == SQLITE_OK) {
+        if (sqlite3_prepare_v2(db, id ? "update messages set deleted = 1, alarm = 0, keep = 0, age = '' where id = ?1 and coalesce(deleted,0) = 0"
+                                      : "update messages set deleted = 1, alarm = 0, age = '' where coalesce(deleted,0) = 0 and coalesce(keep,0) = 0", -1, &stmt, NULL) == SQLITE_OK) {
                 if (id) sqlite3_bind_int64(stmt, 1, (sqlite3_int64) id);
                 if (sqlite3_step(stmt) == SQLITE_DONE) n = sqlite3_changes(db);
                 sqlite3_finalize(stmt);
         }
         sqlite3_close(db);
         return n;
+}
+
+// Tags a message for permanent retention, or removes the tag (IMO MSC.508(105), 6.1.2: "the user
+// should be able to tag individual messages for permanent retention", up to 25 % of the memory;
+// of the 200 messages the standard asks for, that is 50). 0 done, -1 no such message, -2 database
+// error, -3 too many tagged already.
+int set_keep(unsigned int id, int keep) {
+        sqlite3 *db;
+        sqlite3_stmt *stmt;
+        int rc = -2, tagged = 0;
+
+        open_db(&db);
+        if (db == NULL) return -2;
+        if (keep && sqlite3_prepare_v2(db, "select count(*) from messages where coalesce(keep,0) = 1 and coalesce(deleted,0) = 0 and id <> ?1", -1, &stmt, NULL) == SQLITE_OK) {
+                sqlite3_bind_int64(stmt, 1, (sqlite3_int64) id);
+                if (sqlite3_step(stmt) == SQLITE_ROW) tagged = sqlite3_column_int(stmt, 0);
+                sqlite3_finalize(stmt);
+        }
+        if (keep && tagged >= MAX_KEPT_MESSAGES) { sqlite3_close(db); return -3; }
+        if (sqlite3_prepare_v2(db, "update messages set keep = ?2 where id = ?1 and coalesce(deleted,0) = 0", -1, &stmt, NULL) == SQLITE_OK) {
+                sqlite3_bind_int64(stmt, 1, (sqlite3_int64) id);
+                sqlite3_bind_int(stmt, 2, keep ? 1 : 0);
+                if (sqlite3_step(stmt) == SQLITE_DONE) rc = sqlite3_changes(db) > 0 ? 0 : -1;
+                sqlite3_finalize(stmt);
+        }
+        sqlite3_close(db);
+        return rc;
 }
 
 // Search and rescue messages (B2 = D) still waiting to be acknowledged
@@ -695,7 +732,7 @@ char *get_messages_changed(unsigned int since_id, long heard_after, int limit) {
         open_db(&db);
         if (db == NULL) return NULL;
         json = cJSON_CreateArray();
-        if (sqlite3_prepare_v2(db, "select id,bbbb,freq,timestamp,complete,message,age,coalesce(errors,0),coalesce(heard, strftime('%s', timestamp)),coalesce(alarm,0)"
+        if (sqlite3_prepare_v2(db, "select id,bbbb,freq,timestamp,complete,message,age,coalesce(errors,0),coalesce(heard, strftime('%s', timestamp)),coalesce(alarm,0),coalesce(keep,0)"
                                    " from messages where coalesce(deleted,0) = 0 and (id > ?1 or (?3 > 0 and heard > ?3)) order by id asc limit ?2", -1, &stmt, NULL) == SQLITE_OK) {
                 sqlite3_bind_int64(stmt, 1, (sqlite3_int64) since_id);
                 sqlite3_bind_int(stmt, 2, limit);
@@ -725,7 +762,7 @@ char *get_messages_changed(unsigned int since_id, long heard_after, int limit) {
                                 int slot = in_own_slot(bbbb[0], (const char *) sqlite3_column_text(stmt, 3));
                                 cJSON_AddNumberToObject(m, "characters", n);
                                 cJSON_AddNumberToObject(m, "errors", errors);
-                                // character error rate below 4 % and complete (IMO MSC.148(77), 6.2.3)
+                                // character error rate below 4 % and complete (IMO MSC.508(105), 6.2.3)
                                 cJSON_AddBoolToObject(m, "satisfactory", satisfactorily_received(complete, errors, n));
                                 // last time the broadcast was received, unix time
                                 cJSON_AddNumberToObject(m, "heard", (double) sqlite3_column_int64(stmt, 8));
@@ -733,6 +770,8 @@ char *get_messages_changed(unsigned int since_id, long heard_after, int limit) {
                                 if (slot >= 0) cJSON_AddBoolToObject(m, "in_slot", slot);
                                 // search and rescue information not yet acknowledged
                                 if (sqlite3_column_int(stmt, 9)) cJSON_AddBoolToObject(m, "alarm", 1);
+                                // tagged by the user for permanent retention
+                                if (sqlite3_column_int(stmt, 10)) cJSON_AddBoolToObject(m, "keep", 1);
                         }
                         cJSON_AddStringToObject(m, "message", text);
                         // not yet opened in the web interface
