@@ -46,6 +46,18 @@ Probado el mismo día fuera del NUC, con el programa real y esas grabaciones: la
 
 **Sin probar todavía:** la recepción de un mensaje completo del aire, una emisión real en 4209,5 kHz, y la salida NMEA 0183 con un plotter. El detalle de cada parte está en el [historial de cambios](CHANGELOG.md).
 
+## Vista previa
+
+| Mensajes | Estaciones |
+| :---: | :---: |
+| [![Mensajes](docs/img/mensajes.png)](docs/img/mensajes.png) | [![Estaciones](docs/img/estaciones.png)](docs/img/estaciones.png) |
+| Lista por frecuencia y tema, con el texto, la calidad de la recepción y «Conservar siempre» | Las 263 estaciones por distancia, con su próxima emisión y qué se sigue |
+| **Receptores** | **Aspecto** |
+| [![Receptores](docs/img/receptores.png)](docs/img/receptores.png) | [![Aspecto](docs/img/aspecto.png)](docs/img/aspecto.png) |
+| Equipo y banda de cada receptor, conservación y salida NMEA 0183 | Sistema, automático por el sol, claro, oscuro o noche; español o inglés |
+
+Cada apartado de la interfaz se explica en [La interfaz web](#la-interfaz-web).
+
 ## Qué hace falta
 
 - Un equipo con Linux. Está hecho y probado en Debian 13; un procesador modesto basta.
@@ -55,35 +67,94 @@ Probado el mismo día fuera del NUC, con el programa real y esas grabaciones: la
 - Una antena para 490–518 kHz. Las antenas activas de NAVTEX necesitan alimentación; véase [Antenas](#antenas).
 - Opcional: un GPS servido por gpsd, para la posición propia.
 
+### Dependencias y librerías
+
+| Paquete de Debian | Para qué | ¿Obligatorio? |
+| :--- | :--- | :--- |
+| `git` | Descargar el código y actualizarlo | Sí |
+| `build-essential` | Compiladores de C y C++ (`gcc`, `g++`) y `make` | Sí |
+| `autoconf`, `automake` | Generan `configure` y los `Makefile` | Sí |
+| `libcjson-dev` | cJSON: el JSON de la API y de los ajustes | Sí |
+| `libsqlite3-dev` | SQLite: la base de datos de mensajes y ajustes | Sí |
+| `libmicrohttpd-dev` | GNU libmicrohttpd: el servidor de la interfaz web | Sí |
+| `sqlite3` | Crea la base de datos al instalar | Sí |
+| `librtlsdr-dev` | Receptores RTL-SDR | Solo con RTL-SDR |
+| API de SDRplay 3.15 o posterior | Receptores SDRplay. No está en Debian: se baja de [sdrplay.com/api](https://www.sdrplay.com/api/) y se instala con su propio instalador | Solo con SDRplay |
+| `gpsd` | Posición propia | Opcional |
+
+`./configure` comprueba cada librería y dice al final qué receptores quedan incluidos. Hace falta al menos uno de los dos (RTL-SDR o SDRplay). Las licencias de cada librería están en [COPYING.md](COPYING.md).
+
 ## Instalación
 
-Dependencias (falta la API de SDRplay, que se instala aparte, si va a usar un SDRplay):
+**1. Dependencias.** Si va a usar un SDRplay, instale antes su API.
 
 ```bash
-sudo apt install build-essential autoconf automake libcjson-dev libsqlite3-dev libmicrohttpd-dev sqlite3 librtlsdr-dev
+sudo apt install git build-essential autoconf automake libcjson-dev libsqlite3-dev libmicrohttpd-dev sqlite3 librtlsdr-dev
 ```
 
-Compilar, instalar y montar los servicios:
+**2. Descargar el código.**
 
 ```bash
 git clone https://github.com/EA7JRS/Navtex.git
 cd Navtex
+```
+
+**3. Compilar.**
+
+```bash
 autoreconf -i && automake --add-missing; autoreconf
 ./configure
 make
+```
+
+`./configure` acaba con una línea como `receivers: SDRplay yes, RTL-SDR yes`: compruebe que el suyo dice `yes`.
+
+**4. Comprobar (opcional).** Pasa las pruebas de las reglas del receptor, la memoria y las sentencias NMEA; no toca la instalación.
+
+```bash
+make check
+```
+
+**5. Instalar los programas.** Van a `/usr/local/bin`; la interfaz web y la base de datos, a `/opt/Navtex`.
+
+```bash
 sudo make install
+```
+
+**6. Montar los servicios.** Toma como usuario el que ejecuta `sudo`, o el que se indique con `--usuario`.
+
+```bash
 sudo sh tools/instalar-servicios.sh
 ```
 
-`./configure` dice al final qué receptores quedan incluidos (`receivers: SDRplay yes, RTL-SDR yes`); ninguno de los dos es obligatorio. El instalador de servicios toma como usuario el que ejecuta `sudo`, o el que se indique con `--usuario`.
-
-Después abra `http://<equipo>:8080/`. Si hay cortafuegos, abra ese puerto a la red local (y, si usa la salida NMEA 0183 por TCP, también el puerto que elija para ella):
+**7. Abrir la interfaz:** `http://<equipo>:8080/`. Elija equipo y banda de cada receptor en la pestaña Receptores. Si hay cortafuegos, abra ese puerto a la red local (y, si usa la salida NMEA 0183 por TCP, también el puerto que elija para ella):
 
 ```bash
 sudo ufw allow from 192.168.0.0/16 to any port 8080 proto tcp
 ```
 
-**Actualizar:** `git pull` y repetir desde `autoreconf`. La base de datos con los mensajes y los ajustes se conserva. **Retirar los servicios:** `sudo sh tools/instalar-servicios.sh --quitar`.
+### Actualizar
+
+Desde la carpeta donde se clonó el código (no desde `/opt/Navtex`, que es donde se instala), con el usuario dueño de esa carpeta:
+
+```bash
+git pull
+autoreconf -i && automake --add-missing; autoreconf
+./configure && make
+sudo make install
+sudo systemctl restart navtex-web navtex-receiver@1 navtex-receiver@2
+```
+
+La base de datos con los mensajes y los ajustes se conserva (`Keeping the existing /opt/Navtex/Navtex.db`). Después, recargue la página con Ctrl+F5.
+
+### Desinstalar
+
+```bash
+sudo sh tools/instalar-servicios.sh --quitar     # para y retira los servicios
+sudo make uninstall                              # quita los programas de /usr/local/bin
+```
+
+`/opt/Navtex` (mensajes y ajustes) y `/etc/default/navtex` no se borran: quítelos a mano si ya no los quiere.
 
 ## Servicios
 
@@ -103,6 +174,102 @@ sudo systemctl start sdrconnect          # devolvérselo a SDRconnect
 ```
 
 Registro en vivo: `journalctl -u 'navtex-receiver@*' -f`
+
+## Comandos
+
+### Servicios
+
+| Comando | Qué hace |
+| :--- | :--- |
+| `systemctl is-active navtex-web navtex-receiver@1 navtex-receiver@2` | Dice si los tres están en marcha |
+| `systemctl status navtex-web` | Estado y últimas líneas de la interfaz web |
+| `sudo systemctl restart navtex-web` | Reinicia la interfaz web (tras cambiar `/etc/default/navtex` o actualizar) |
+| `sudo systemctl restart navtex-receiver@1` | Reinicia el receptor 1 (`@2` para el segundo) |
+| `sudo systemctl stop navtex-receiver@1` | Suelta el equipo, por ejemplo para usarlo con otro programa |
+| `journalctl -u 'navtex-receiver@*' -f` | Registro en vivo de los receptores: sincronismo y mensajes guardados |
+| `journalctl -u navtex-web -n 50` | Últimas 50 líneas de la interfaz web y de la salida NMEA |
+| `sudo sh tools/instalar-servicios.sh --usuario <nombre>` | Vuelve a montar los servicios con otro usuario |
+| `sudo sh tools/instalar-servicios.sh --quitar` | Para y retira los servicios |
+
+### `navtexreceiver`: el receptor
+
+Los servicios lo arrancan con `-n 1` y `-n 2`. A mano sirve para probar un equipo o descodificar una grabación (pare antes el servicio que use ese equipo).
+
+| Opción | Qué hace |
+| :--- | :--- |
+| `-h` | Ayuda con todas las opciones |
+| `-n 1` o `-n 2` | Receptor 1 o 2: toma todos los ajustes de la web y sigue sus cambios sin reiniciar |
+| `-s sdrplay` \| `rtlsdr` \| `file` | Tipo de equipo (de serie, SDRplay si está compilado; si no, RTL-SDR) |
+| `-B mf` \| `hf` | Banda: 518 y 490 kHz a la vez (de serie), o solo 4209,5 kHz |
+| `-b` | Alimenta la antena por el coaxial (bias T) |
+| `-p A` \| `B` \| `C` | SDRplay: toma de antena (RSPdx, RSPdx-R2) |
+| `-i <n>` | RTL-SDR: número de equipo (de serie, 0) |
+| `-S <serie>` | RTL-SDR: elige el equipo por su número de serie |
+| `-D 0` \| `1` \| `2` | RTL-SDR: muestreo directo apagado, rama I o rama Q. Sin indicarlo, según el modelo |
+| `-u <hercios>` | RTL-SDR: oscilador de un conversor externo, por ejemplo `125000000` |
+| `-g <dB>` | RTL-SDR: ganancia, por ejemplo `28.0` (de serie, automática; no se usa en muestreo directo) |
+| `-P <ppm>` | RTL-SDR: corrección del cristal |
+| `-f <archivo>` | Descodifica una grabación en vez de un receptor: `.wav` de 16 bits con I y Q (como las de `-d`) o I/Q de 8 bits sin signo (como las de `rtl_sdr`), a 252000 muestras/s centradas en 504 kHz |
+| `-t` | Con `-f`: reproduce la grabación a velocidad real |
+| `-d` | Graba además las muestras recibidas en un `.wav` |
+| `-v` / `-q` | Muestra cada carácter recibido / solo lo importante |
+
+Ejemplos:
+
+```bash
+navtexreceiver -s rtlsdr                 # RTL-SDR, modo según el modelo, 518 y 490 kHz
+navtexreceiver -p C                      # SDRplay por la toma C
+navtexreceiver -s rtlsdr -u 125000000    # RTL-SDR con conversor de 125 MHz
+navtexreceiver -B hf                     # 4209,5 kHz
+navtexreceiver -f grabacion.wav          # descodificar una grabación
+```
+
+### `navtexwebserver`: la interfaz web y la API
+
+```bash
+navtexwebserver [puerto] [dirección]
+```
+
+| Argumento | Qué es |
+| :--- | :--- |
+| `puerto` | Puerto TCP (de serie, 8080) |
+| `dirección` | Dirección IPv4 en la que escucha (de serie, todas); `127.0.0.1` para solo este equipo |
+
+Como servicio toma el puerto, la dirección y el gpsd de `/etc/default/navtex` (`WEB_PORT`, `WEB_ADDRESS`, `NAVTEX_GPSD`); tras cambiarlos, `sudo systemctl restart navtex-web`.
+
+### Compilación
+
+| Comando | Qué hace |
+| :--- | :--- |
+| `autoreconf -i && automake --add-missing; autoreconf` | Genera `configure` (tras clonar o actualizar) |
+| `./configure` | Comprueba las librerías y prepara la compilación |
+| `make` | Compila `navtexreceiver` y `navtexwebserver` |
+| `make check` | Pasa las pruebas (113 comprobaciones) |
+| `sudo make install` | Instala los programas y la interfaz; conserva la base de datos |
+| `sudo make uninstall` | Quita los programas |
+| `make clean` | Borra lo compilado |
+
+### Consultas rápidas
+
+```bash
+curl -s http://127.0.0.1:8080/api/status                  # estado: receptores, mensajes, alarmas
+curl -s "http://127.0.0.1:8080/api/messages?since=0"      # todos los mensajes, en JSON
+curl -s -o navtex.txt "http://127.0.0.1:8080/api/export?format=txt"   # guardarlos en un archivo
+curl -s http://127.0.0.1:8080/api/nrx                     # estado de la salida NMEA 0183
+curl -s -X POST -H "X-Navtex: 1" http://127.0.0.1:8080/api/alarm/ack  # reconocer la alarma de salvamento
+```
+
+Todas las llamadas están en [API](#api). La salida NMEA 0183 por TCP se puede mirar con `nc <equipo> <puerto>`.
+
+### Dónde está cada cosa
+
+| Ruta | Qué hay |
+| :--- | :--- |
+| `/usr/local/bin/navtexreceiver`, `/usr/local/bin/navtexwebserver` | Los dos programas |
+| `/opt/Navtex/Navtex.db` | Mensajes y ajustes (SQLite) |
+| `/opt/Navtex/build/` | La interfaz web |
+| `/etc/default/navtex` | Puerto, dirección de escucha y gpsd de la interfaz web |
+| `/etc/systemd/system/navtex-web.service`, `navtex-receiver@.service` | Los servicios |
 
 ## La interfaz web
 
