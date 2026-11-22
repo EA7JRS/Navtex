@@ -60,6 +60,7 @@
 #include <arpa/inet.h>
 #include "../receiver/message_store.h"
 #include "gps.h"
+#include "nrx.h"
 
 #define MAX_URL_LEN 255
 
@@ -103,6 +104,27 @@ send_text (struct MHD_Connection *connection, unsigned int status,
     MHD_add_response_header (response, "Cache-Control", "no-store");
   }
   ret = MHD_queue_response (connection, status, response);
+  MHD_destroy_response (response);
+  return ret;
+}
+
+/* A file for the browser to save */
+static enum MHD_Result
+send_download (struct MHD_Connection *connection, const char *body, const char *content_type, const char *file_name)
+{
+  struct MHD_Response *response;
+  enum MHD_Result ret;
+  char disposition[96];
+
+  response = MHD_create_response_from_buffer (strlen (body), (void *) body, MHD_RESPMEM_MUST_COPY);
+  if (response == NULL)
+    return MHD_NO;
+  snprintf (disposition, sizeof (disposition), "attachment; filename=\"%s\"", file_name);
+  MHD_add_response_header (response, "Content-Type", content_type);
+  MHD_add_response_header (response, "Content-Disposition", disposition);
+  MHD_add_response_header (response, "X-Content-Type-Options", "nosniff");
+  MHD_add_response_header (response, "Cache-Control", "no-store");
+  ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
   MHD_destroy_response (response);
   return ret;
 }
@@ -263,7 +285,9 @@ http_ahc (void *cls,
       /* Full messages newer than ?since=<id>, for other programs; nothing is marked as read */
       const char *since_arg = MHD_lookup_connection_value (connection, MHD_GET_ARGUMENT_KIND, "since");
       const char *limit_arg = MHD_lookup_connection_value (connection, MHD_GET_ARGUMENT_KIND, "limit");
-      unsigned long since = 0, limit = 200;
+      /* ...and those heard again after ?heard=<unix time>: what is still being broadcast */
+      const char *heard_arg = MHD_lookup_connection_value (connection, MHD_GET_ARGUMENT_KIND, "heard");
+      unsigned long since = 0, limit = 200, heard = 0;
       char *end;
       char *ml;
 
@@ -281,12 +305,78 @@ http_ahc (void *cls,
         if (!isdigit ((unsigned char) limit_arg[0]) || errno != 0 || *end != '\0' || limit < 1 || limit > 500)
           return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
       }
-      ml = get_messages_since ((unsigned int) since, (int) limit);
+      if (heard_arg != NULL)
+      {
+        errno = 0;
+        heard = strtoul (heard_arg, &end, 10);
+        if (!isdigit ((unsigned char) heard_arg[0]) || errno != 0 || *end != '\0' || heard > 0x7fffffffUL)
+          return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+      }
+      purge_old_messages ();
+      ml = get_messages_changed ((unsigned int) since, (long) heard, (int) limit);
       if (ml == NULL)
         return send_text (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, ERROR_JSON, "application/json", 1);
       ret = send_text (connection, MHD_HTTP_OK, ml, "application/json", 1);
       free (ml);
       return ret;
+  }
+  if (strcmp (url, "/api/export") == 0)
+  {
+      /* Every stored message as a file: ?format=txt (default) or csv, ?freq=518|490|4209 */
+      const char *format = MHD_lookup_connection_value (connection, MHD_GET_ARGUMENT_KIND, "format");
+      const char *freq_arg = MHD_lookup_connection_value (connection, MHD_GET_ARGUMENT_KIND, "freq");
+      int csv = format != NULL && strcmp (format, "csv") == 0;
+      int freq = 0;
+      char *ex;
+
+      if (format != NULL && !csv && strcmp (format, "txt") != 0)
+        return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+      if (freq_arg != NULL)
+      {
+        if (strcmp (freq_arg, "518") == 0) freq = 518;
+        else if (strcmp (freq_arg, "490") == 0) freq = 490;
+        else if (strcmp (freq_arg, "4209") == 0) freq = 4209;
+        else return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+      }
+      ex = export_messages (csv, freq);
+      if (ex == NULL)
+        return send_text (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, ERROR_JSON, "application/json", 1);
+      ret = send_download (connection, ex, csv ? "text/csv; charset=UTF-8" : "text/plain; charset=UTF-8", csv ? "navtex.csv" : "navtex.txt");
+      free (ex);
+      return ret;
+  }
+  if (strcmp (url, "/api/nrx") == 0)
+  {
+      char *n = nrx_json ();
+      if (n == NULL)
+        return send_text (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, ERROR_JSON, "application/json", 0);
+      ret = send_text (connection, MHD_HTTP_OK, n, "application/json", 0);
+      free (n);
+      return ret;
+  }
+  if (strncmp (url, "/api/messages/delete/", 21) == 0)
+  {
+      /* POST /api/messages/delete/<id>  or  .../all : hides them; see delete_messages() */
+      const char *what = url + 21;
+      unsigned long m_id = 0;
+      char *end;
+      char answer[40];
+      int n;
+
+      if (0 != strcmp (method, MHD_HTTP_METHOD_POST) || !is_own_request (connection))
+        return send_text (connection, MHD_HTTP_FORBIDDEN, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+      if (strcmp (what, "all") != 0)
+      {
+        errno = 0;
+        m_id = strtoul (what, &end, 10);
+        if (!isdigit ((unsigned char) what[0]) || errno != 0 || *end != '\0' || m_id == 0 || m_id > 0x7fffffffUL)
+          return send_text (connection, MHD_HTTP_BAD_REQUEST, BAD_REQUEST_PAGE, "text/html; charset=UTF-8", 0);
+      }
+      n = delete_messages ((unsigned int) m_id);
+      if (n < 0)
+        return send_text (connection, MHD_HTTP_INTERNAL_SERVER_ERROR, ERROR_JSON, "application/json", 0);
+      snprintf (answer, sizeof (answer), "{\"deleted\":%d}", n);
+      return send_text (connection, MHD_HTTP_OK, answer, "application/json", 0);
   }
   if (strcmp (url, "/api/status") == 0)
   {
@@ -434,6 +524,7 @@ main (int argc, char *const *argv)
     const char *gpsd = getenv ("NAVTEX_GPSD");
     if (gpsd == NULL) gpsd = "127.0.0.1:2947";
     gps_start (gpsd);
+    nrx_start ();
     printf (gpsd[0] != '\0' ? "Position from gpsd at %s\n" : "Position from gpsd disabled%s\n", gpsd);
   }
   fflush (stdout);

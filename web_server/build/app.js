@@ -278,10 +278,30 @@
   }
 
   // Nombre de la estación de esa letra más probable: la más cercana que la usa
-  function nombreEstacion(m) {
+  // ¿Emite esa estación a la hora en que se recibió el mensaje? Cada una tiene su turno de diez
+  // minutos; el mensaje se guarda al terminar, así que vale hasta trece minutos después del comienzo.
+  function enTurno(e, ms) {
+    var d = new Date(ms), min = d.getUTCHours() * 60 + d.getUTCMinutes();
+    return e.horas.some(function (h) {
+      var desde = (min - (Number(h.slice(0, 2)) * 60 + Number(h.slice(2))) + 1440) % 1440;
+      return desde <= 13;
+    });
+  }
+  // Qué estación mandó el mensaje: varias comparten letra, pero no turno. Primero las que emitían
+  // a esa hora, y entre ellas la más cercana. { nombre, porTurno } o null.
+  function estacionDe(m) {
     var lista = conDistancia(m.freq === 490 || m.freq === 4209 ? m.freq : 518).filter(function (x) { return x.e.letra === m.station; });
-    if (!lista.length || lista[0].d === null) return '';
-    return lista[0].e.nombre;
+    var turno = lista.filter(function (x) { return enTurno(x.e, m.recibido); });
+    if (turno.length === 1 || (turno.length > 1 && turno[0].d !== null)) return { nombre: turno[0].e.nombre, porTurno: true };
+    if (!lista.length || lista[0].d === null) return null;
+    return { nombre: lista[0].e.nombre, porTurno: false };
+  }
+  function borrar(id) {
+    return enviar('/api/messages/delete/' + id).then(leerTodo).catch(function (e) {
+      var error = $('error-general');
+      error.hidden = false;
+      error.textContent = 'No se pudo borrar: ' + e.message + '.';
+    });
   }
 
   function pintarLista() {
@@ -311,17 +331,28 @@
       if (linea) meta.appendChild(crear('span', 'resumen-linea', linea));
       meta.appendChild(document.createTextNode('estación ' + m.station + ' · ' + nombreFreq(m.freq) + ' · ' + haceCuanto(m.recibido, ahora) + ' (' + fechaUtc(m.recibido) + ')'));
       if (!m.complete) { meta.appendChild(document.createTextNode(' · ')); meta.appendChild(crear('span', 'cortado', 'cortado')); }
+      else if (m.satisfactory === false) { meta.appendChild(document.createTextNode(' · ')); meta.appendChild(crear('span', 'cortado', 'con errores')); }
       boton.appendChild(meta);
       boton.addEventListener('click', function () { alternar(m); });
       li.appendChild(boton);
       if (abiertos[m.id]) {
         var cuerpo = crear('div', 'cuerpo');
         cuerpo.appendChild(crear('pre', '', m.message));
-        var cerca = nombreEstacion(m);
+        var est = estacionDe(m);
+        var oido = typeof m.heard === 'number' && m.heard * 1000 - m.recibido > 600000 ? m.heard * 1000 : 0;
+        var malos = typeof m.errors === 'number' ? m.errors : 0;
+        var tasa = malos && m.characters ? (100 * malos / m.characters).toFixed(1).replace('.', ',') : '';
         cuerpo.appendChild(crear('p', 'nota', 'Recibido el ' + fechaUtc(m.recibido) + ' (' + horaLocal(m.recibido) + ' hora local) en ' + nombreFreq(m.freq) + '.'
-          + (cerca ? ' La estación ' + m.station + ' más cercana en esa frecuencia es ' + cerca + '.' : '')
+          + (oido ? ' La estación lo sigue emitiendo: oído por última vez ' + haceCuanto(oido, ahora) + '.' : '')
+          + (est ? (est.porTurno ? ' Por la letra y la hora, lo emitió ' + est.nombre + '.' : ' La estación ' + m.station + ' más cercana en esa frecuencia es ' + est.nombre + '.') : '')
+          + (m.in_slot === false ? ' Llegó fuera del turno de la letra ' + m.station + ': puede ser una estación lejana con otro horario.' : '')
           + (m.complete ? '' : ' La recepción se cortó antes del final del mensaje.')
-          + (m.message.indexOf('*') >= 0 ? ' Cada asterisco es un carácter que no se pudo recibir bien.' : '')));
+          + (malos ? ' ' + malos + (malos === 1 ? ' carácter no se pudo recibir bien (el asterisco): ' : ' caracteres no se pudieron recibir bien (los asteriscos): ') + tasa + ' %.' : '')
+          + (m.satisfactory === false && m.complete ? ' Con un 4 % o más de errores la recepción no se da por buena: si la estación lo repite mejor, la copia nueva sustituye a esta.' : '')));
+        var bb = crear('button', 'boton pequeno', 'Borrar este mensaje');
+        bb.type = 'button'; bb.id = 'borrar-' + m.id;
+        bb.addEventListener('click', function () { borrar(m.id); });
+        cuerpo.appendChild(bb);
         li.appendChild(cuerpo);
       }
       lista.appendChild(li);
@@ -331,6 +362,7 @@
     $('resumen').textContent = mensajes.length === 0 ? ''
       : ver.length + (ver.length === 1 ? ' mensaje' : ' mensajes')
         + (ocultos > 0 ? ' · ' + ocultos + ' más de estaciones o temas que no sigue' : '');
+    $('acciones-mensajes').hidden = mensajes.length === 0;
     var vacio = $('vacio');
     vacio.hidden = ver.length > 0;
     vacio.textContent = mensajes.length === 0
@@ -659,9 +691,34 @@
       raiz.appendChild(t);
     });
     if (estado) pintarEstado();
+    pintarSalida();
   }
 
   // ---------------------------------------------------------------- lectura
+  // ------------------------------------------ conservación y salida NMEA
+  function pintarSalida() {
+    var raiz = $('salida');
+    if (!raiz) return;
+    raiz.textContent = '';
+    var v = function (k, defecto) { return ajustes[k] !== undefined && ajustes[k] !== '' ? ajustes[k] : defecto; };
+    var r = crear('div', 'rejilla');
+    r.appendChild(campo('Horas que se conserva un mensaje desde la última vez que se oye (72 a 8760)', texto('retencion', v('retention_hours', '72'), '72',
+      function (x) { var n = Math.round(Number(x)); ponerAjuste('retention_hours', String(isFinite(n) ? Math.min(8760, Math.max(72, n)) : 72)).then(pintarSalida); })));
+    r.appendChild(campo('NMEA 0183 por UDP: destino (equipo:puerto; vacío, apagado)', texto('nrx-udp', v('nrx.udp', ''), '192.168.1.255:10110',
+      function (x) { ponerAjuste('nrx.udp', /^[A-Za-z0-9.-]{1,70}:\d{1,5}$/.test(x) ? x : '').then(pintarSalida); })));
+    r.appendChild(campo('NMEA 0183 por TCP: puerto del servidor (0, apagado)', texto('nrx-tcp', v('nrx.tcp', '0'), '10110',
+      function (x) { var n = Math.round(Number(x)); ponerAjuste('nrx.tcp', String(isFinite(n) && n >= 1024 && n <= 65535 ? n : 0)).then(pintarSalida); })));
+    raiz.appendChild(r);
+    var est = crear('p', 'nota'); est.id = 'estado-nrx'; raiz.appendChild(est);
+    pedir('/api/nrx').then(function (j) {
+      var partes = [];
+      if (j.udp) partes.push('UDP a ' + j.udp);
+      if (j.tcp) partes.push('servidor TCP en el puerto ' + j.tcp + ' (' + j.clients + (j.clients === 1 ? ' programa conectado' : ' programas conectados') + ')');
+      est.textContent = (partes.length ? 'Salida NMEA: ' + partes.join(' y ') + '. Mensajes enviados desde que arrancó: ' + j.sent + '.' : 'Salida NMEA apagada.')
+        + (j.error ? ' Último fallo: ' + j.error + '.' : '');
+    }).catch(function () { est.textContent = ''; });
+  }
+
   function leerConfig() {
     return pedir('/config').then(function (filas) {
       (Array.isArray(filas) ? filas : []).forEach(function (f) {
@@ -732,6 +789,9 @@
   $('filtro-tema').addEventListener('change', function (e) { filtro.tema = e.target.value; pintarLista(); });
   $('filtro-texto').addEventListener('input', function (e) { filtro.texto = e.target.value; pintarLista(); });
   $('filtro-todo').addEventListener('change', function (e) { filtro.todo = e.target.checked; pintarLista(); });
+  $('borrar-todos').addEventListener('click', function () {
+    if (window.confirm('¿Borrar todos los mensajes guardados? Los que las estaciones repitan en las próximas 72 horas no volverán a aparecer.')) borrar('all');
+  });
 
   // Aspecto: automático (el del equipo), claro u oscuro; se recuerda en este navegador
   var tema = $('tema');

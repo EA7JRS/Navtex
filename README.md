@@ -24,7 +24,10 @@ Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.c
 | Estaciones del mundo | 263 estaciones con letra, posición, horas, alcance e idioma; ordenadas por distancia desde la posición propia |
 | Posición por GPS | Tomada de gpsd; recuadro con la posición junto a la hora |
 | Salida para otros programas | API de solo lectura en JSON; [S.A.T.-APRS+](https://github.com/EA7JRS/sat-aprs) la usa para convertir los mensajes en avisos |
-| Mensajes incompletos | Una recepción cortada se guarda marcada, y no sustituye a una copia mejor |
+| Mensajes incompletos o con errores | Se guardan marcados, con su número de caracteres mal recibidos; una copia mejor sustituye a una peor, nunca al revés |
+| Reglas de un receptor NAVTEX | Recepción buena con menos de un 4 % de errores; cada mensaje se recuerda 72 horas para no repetirlo; los de número 00 se muestran siempre; se comprueba el turno de la letra |
+| Borrar y guardar | Borrar un mensaje o todos; guardar todos en un archivo de texto o CSV; tiempo de conservación ajustable |
+| Salida NMEA 0183 | Cada mensaje nuevo en sentencias `NRX`, por UDP y por un servidor TCP |
 
 ## Estado de las pruebas
 
@@ -211,17 +214,62 @@ Para que otro programa recoja los mensajes por la red. Todo en JSON y con las ho
 | `GET /api/gps` | Posición, fijo, satélites y hora del GPS |
 | `GET /api/settings` | Ajustes de los receptores y de la posición |
 
+| `GET /api/messages?since=<id>&heard=<hora unix>` | Además, los mensajes que se han vuelto a oír después de `heard`: los que la estación sigue emitiendo |
+| `GET /api/export?format=txt` o `csv`, y `&freq=518`, `490` o `4209` | Todos los mensajes en un archivo |
+| `GET /api/nrx` | Estado de la salida NMEA 0183 |
+| `POST /api/messages/delete/<id>` o `/all` | Borra un mensaje o todos |
+
 ```json
 {"id":5,"bbbb":"EE39","station":"E","subject":"E","number":39,"freq":490,
- "received":"2026-11-22T07:38:00Z","complete":false,"unread":true,
+ "received":"2026-11-22T07:38:00Z","complete":false,"characters":765,"errors":3,
+ "satisfactory":false,"heard":1795333080,"in_slot":false,"unread":true,
  "message":"ZCZC EE39\n062040 UTC NOV 21\n..."}
 ```
 
-`freq` vale 518, 490 o 4209 (por 4209,5 kHz). El uso previsto es preguntar cada minuto con el último `id` recibido.
+`freq` vale 518, 490 o 4209 (por 4209,5 kHz). `errors` son los caracteres que no se pudieron recibir (los asteriscos); `satisfactory`, que el mensaje llegó entero y con menos de un 4 % de errores; `heard`, la última vez que se oyó; `in_slot`, si llegó en el turno de su letra. El uso previsto es preguntar cada minuto con el último `id` recibido.
 
-Los cambios (`/api/settings/<clave>/<valor>` y `/saveconfig/<ajuste>/<valor>`) solo se aceptan por `POST` y con la cabecera `X-Navtex`, de modo que otra página abierta en el mismo navegador no puede cambiar nada.
+Los cambios (`/api/settings/<clave>/<valor>`, `/saveconfig/<ajuste>/<valor>` y `/api/messages/delete/…`) solo se aceptan por `POST` y con la cabecera `X-Navtex`, de modo que otra página abierta en el mismo navegador no puede cambiar nada.
 
-**NMEA 2000.** No existe un mensaje normalizado de NMEA 2000 para el texto de NAVTEX; el formato normalizado es la sentencia `NRX` de NMEA 0183. Este programa no inventa uno: los mensajes llegan al bus a través de S.A.T.-APRS+, que los recoge por esta API.
+## Reglas de un receptor NAVTEX
+
+El programa sigue lo que piden a un receptor la resolución MSC.148(77) de la OMI y el Manual NAVTEX, y las características de la Recomendación UIT-R M.540 (impresión directa de banda estrecha con corrección de errores, modo B colectivo: 100 baudios y 170 Hz de desplazamiento).
+
+| Regla | Cómo se aplica |
+| :--- | :--- |
+| Un mensaje se da por bien recibido con menos de un 4 % de caracteres erróneos (MSC.148(77), 6.2.3) | Se cuentan los caracteres que no se pudieron recibir. Solo un mensaje completo y por debajo del 4 % impide que se guarde su repetición |
+| La identidad de un mensaje (B1B2B3B4) se recuerda de 60 a 72 horas (MSC.148(77), 6.2.2) | 72 horas. En ese tiempo, la repetición no vuelve a aparecer como nueva; después, sí |
+| Un mensaje mal recibido no se recuerda | Si la estación lo repite mejor, la copia nueva sustituye a la anterior |
+| Los mensajes con B3B4 = 00 se muestran siempre (UIT-R M.540, Manual NAVTEX 5.4.3) | Se guardan cada vez, y la interfaz los enseña aunque no se siga esa estación o ese tema |
+| Los temas A, B, D y L no se pueden rechazar (Manual NAVTEX 5.3.4) | En la interfaz no se pueden desmarcar |
+| El carácter mal recibido se marca con un asterisco (MSC.148(77), 5.7) | Así se guarda y así se muestra |
+| Cada letra B1 tiene diez minutos cada cuatro horas: A a las 0000, B a las 0010… X a las 0350 (Manual NAVTEX, tabla 2) | Cada mensaje dice si llegó en el turno de su letra, y con la hora se averigua cuál de las estaciones que comparten letra lo emitió |
+| Memoria para al menos 200 mensajes (MSC.148(77), 6.1.1) | Sin límite de número; se borran al cumplir el tiempo de conservación sin volver a oírse |
+| Una interfaz para pasar los datos a otros equipos, según IEC 61162 (MSC.148(77), 9) | Sentencias `NRX` de NMEA 0183 |
+
+Lo que **no** hace: la alarma de los mensajes de búsqueda y salvamento (tema D) que solo se puede apagar a mano; la interfaz los destaca en rojo, y S.A.T.-APRS+ los convierte en aviso. Este programa no está homologado ni sustituye a un receptor que lo esté.
+
+**Borrar.** Un mensaje borrado deja de verse, pero su identidad se sigue recordando hasta 72 horas: la repetición de la estación no lo trae de vuelta.
+
+**Conservación.** De serie, un mensaje se borra a las 72 horas de la última vez que se oyó. Se puede alargar hasta un año (pestaña Receptores). Mientras la estación lo siga emitiendo, no se borra.
+
+## Salida NMEA 0183
+
+Cada mensaje nuevo sale en sentencias `NRX`, con la forma de los receptores NAVTEX de Furuno, que es la que usan la app y el plotter APRS LoRa+:
+
+```
+$CRNRX,GA05,1,12,518,22,11,2026,090700,0.0,TEXTO DE LA PRIMERA LINEA*hh
+```
+
+Identidad, número de línea, total de líneas, frecuencia (518, 490 o 4209), día, mes, año, hora UTC de recepción, porcentaje de errores y texto. Una línea de texto por sentencia; las largas se parten, en un espacio si se puede, para no pasar de 82 caracteres; los caracteres reservados van como `^hh`.
+
+Se ajusta en la pestaña Receptores:
+
+- **UDP**: destino `equipo:puerto` (vale la dirección de difusión de la red, por ejemplo `192.168.1.255:10110`). Una sentencia por datagrama.
+- **TCP**: puerto de un servidor al que se conectan los programas (hasta 8 a la vez).
+
+Solo salen los mensajes que llegan desde que se enciende la salida, no los ya guardados. La salida no tiene contraseña y nunca lee nada de quien se conecta.
+
+**NMEA 2000.** No existe un mensaje normalizado de NMEA 2000 para el texto de NAVTEX; la salida normalizada es la sentencia `NRX` de NMEA 0183. Este programa no inventa uno: al bus llegan a través de S.A.T.-APRS+, que los recoge por la API.
 
 ## Seguridad
 
@@ -259,4 +307,4 @@ Si te resulta útil: [paypal.me/ea7jrs](https://paypal.me/ea7jrs)
 
 ## Previsto
 
-- Sentencias `NRX` de NMEA 0183 para equipos que las admitan.
+- La sentencia `NRX` en la forma de IEC 61162-1, además de la de Furuno.

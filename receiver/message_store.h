@@ -27,3 +27,15 @@ int valid_setting(const char *tag, const char *value);
 int set_setting(const char *tag, const char *value);
 int get_setting(const char *tag, char *out, size_t out_size);
 char *get_settings_json(void);
+
+/* What the standards ask of a NAVTEX receiver (IMO MSC.148(77), NAVTEX Manual) */
+int count_bad_characters(const char *message);
+int satisfactorily_received(int complete, int errors, int length);
+int better_copy(int new_complete, int new_errors, int new_len, int old_complete, int old_errors, int old_len);
+int slot_minute(char b1);
+int in_own_slot(char b1, const char *timestamp);
+long retention_seconds(void);
+/* Hide one message (id) or all (0); export them; the API with repeats */
+int delete_messages(unsigned int id);
+char *export_messages(int csv, int freq);
+char *get_messages_changed(unsigned int since_id, long heard_after, int limit);

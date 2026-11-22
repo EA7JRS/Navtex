@@ -64,6 +64,11 @@
       <p class="nota" id="resumen"></p>
       <ol class="lista" id="lista"></ol>
       <p class="vacio" id="vacio" hidden></p>
+      <div class="fila acciones" id="acciones-mensajes" hidden>
+        <a class="boton pequeno" href="/api/export?format=txt" id="exportar-txt" download>Guardar todos como texto</a>
+        <a class="boton pequeno" href="/api/export?format=csv" id="exportar-csv" download>Guardar todos como CSV</a>
+        <button type="button" class="boton pequeno" id="borrar-todos">Borrar todos</button>
+      </div>
     </section>
 
     <section id="vista-estaciones" aria-label="Estaciones" hidden>
@@ -94,6 +99,11 @@
     <section id="vista-receptores" aria-label="Receptores" hidden>
       <p class="nota">Hay dos receptores. Cada uno usa un equipo y escucha una banda: 518 y 490 kHz a la vez, o 4209,5 kHz. Con dos equipos se reciben las tres frecuencias a la vez; con uno solo, puede alternar por horario. Los cambios se aplican solos en unos segundos.</p>
       <div class="tarjetas" id="receptores"></div>
+      <div class="tarjeta" id="tarjeta-salida">
+        <h2>Mensajes: conservación y salida NMEA</h2>
+        <div id="salida"></div>
+        <p class="nota">Un receptor NAVTEX recuerda cada mensaje 72 horas para no repetirlo; aquí además se puede conservar más tiempo mientras la estación lo siga emitiendo. La salida NMEA 0183 manda cada mensaje nuevo en sentencias <span class="mono">NRX</span> (la forma de los receptores Furuno, la misma de la app y el plotter APRS LoRa+). No tiene contraseña: solo en una red de confianza.</p>
+      </div>
       <p class="aviso" id="estado-receptores" hidden></p>
       <p class="nota">Un equipo solo lo puede usar un programa a la vez. Si el receptor dice «sin equipo», puede estar desconectado o en uso por otro programa (por ejemplo, SDRconnect o SDR++): el receptor lo sigue intentando cada 15 segundos.</p>
     </section>

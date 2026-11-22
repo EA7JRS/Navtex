@@ -2,6 +2,22 @@
 
 Fork EA7JRS/Navtex del receptor NAVTEX de bartelvdh. Las entradas dicen también qué se probó y qué no. Lo descrito en una fase puede haber cambiado en las posteriores (por ejemplo, los servicios y sus ajustes): el estado actual es el del [README](README.md).
 
+## [1.2.0] - 2026-11-22
+
+### Reglas de un receptor NAVTEX, borrar, guardar y salida NMEA 0183
+
+- **Reglas de la OMI y la UIT** (MSC.148(77), Manual NAVTEX, UIT-R M.540). Se cuentan los caracteres mal recibidos de cada mensaje; una recepción se da por buena con menos de un 4 %. La identidad de un mensaje bien recibido se recuerda 72 horas: su repetición ya no vuelve a aparecer como nueva (antes, cada repetición completa sustituía a la anterior y salía otra vez como «nuevo»). Una copia mejor sustituye a una peor. Los mensajes con número 00 se guardan siempre.
+- **Turnos.** Cada mensaje dice si llegó en los diez minutos de su letra, y la interfaz usa la hora para decir qué estación lo emitió cuando varias comparten letra.
+- **Borrar** un mensaje o todos. El borrado se recuerda 72 horas, para que la repetición de la estación no lo traiga de vuelta.
+- **Guardar** todos los mensajes en un archivo de texto o CSV (`/api/export`).
+- **Conservación ajustable**: de 72 horas a un año desde la última vez que se oyó el mensaje.
+- **Salida NMEA 0183**: sentencias `NRX` en la forma de Furuno (la de la app y el plotter APRS LoRa+), por UDP y por un servidor TCP.
+- API: campos `characters`, `errors`, `satisfactory`, `heard` e `in_slot`; `?heard=` para saber qué mensajes se siguen emitiendo.
+- `make check`: 61 comprobaciones de las reglas, el borrado, la conservación, la exportación y las sentencias `NRX`.
+- Probado con el programa real y las grabaciones de prueba (UDP y TCP recibidos con `nc`, sumas de control comprobadas). No probado con un plotter ni con mensajes recibidos por antena. La forma de `NRX` se ha tomado del manual del Furuno NX-700 y del código de la app; la de IEC 61162-1 no se ha podido consultar.
+
+---
+
 ## [1.1.0] - 2026-11-22
 
 ### Licencia: GPL-3.0-or-later

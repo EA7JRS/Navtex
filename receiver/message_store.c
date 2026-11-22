@@ -16,11 +16,7 @@ int navtex_verbose = 1;
 int navtex_hf = 0;
 static int schema_checked = 0;
 
-// An incomplete reception does not replace a complete copy of the same message
-// received less than this long ago (a station repeats its messages every 4 hours).
-#define KEEP_COMPLETE_COPY_AGE 60*60*24
-
-#define MESSAGE_PURGE_AGE 60*60*72  			//72 hours in seconds
+#define IDENTITY_MEMORY_AGE (60*60*72)			// a message identity is remembered 72 hours (IMO MSC.148(77), 6.2.2: 60 to 72)
 #define MESSAGE_WEAHTER_FCST_AGE_LIMIT 60*60*28  	//28 hours in seconds mark weather fcsts as old when reaching this age
 
 
@@ -76,6 +72,11 @@ void open_db(sqlite3 **db) {
         // The "alter" fails harmlessly when the column is already there.
         if (!schema_checked) {
                 sqlite3_exec(*db, "alter table messages add column complete integer default 1", NULL, NULL, NULL);
+                // errors: characters received corrupted ('*'); deleted: hidden by the user, its identity is
+                // still remembered; heard: last time the message was received (unix time, UTC)
+                sqlite3_exec(*db, "alter table messages add column errors integer default 0", NULL, NULL, NULL);
+                sqlite3_exec(*db, "alter table messages add column deleted integer default 0", NULL, NULL, NULL);
+                sqlite3_exec(*db, "alter table messages add column heard integer", NULL, NULL, NULL);
                 sqlite3_exec(*db, "create table if not exists status (tag text primary key, value text)", NULL, NULL, NULL);
                 sqlite3_exec(*db, "create table if not exists settings (tag text primary key, value text)", NULL, NULL, NULL);
                 // Receiver 1 keeps doing what a fresh install did; receiver 2 waits to be switched on
@@ -107,14 +108,72 @@ static int valid_config(const char *tag, const char *value) {
 }
 
 
+// ---------------------------------------------------------------------------
+// What a NAVTEX receiver does with a message it has already received
+// (IMO MSC.148(77), 6.2; NAVTEX Manual, 6.2 and 7.5):
+//  - a message is "satisfactorily received" when its character error rate is
+//    below 4 %; only then is its identity B1B2B3B4 remembered;
+//  - an identity is remembered for 60 to 72 hours: a repeat of the broadcast
+//    within that time is not shown again; after that time it is a new message;
+//  - a message with B3B4 = 00 is always shown.
+// Here, on top of that: a better copy replaces a worse one (a cut or corrupted
+// reception), and a message the user deleted stays hidden while its identity
+// is remembered, so the next broadcast does not bring it back.
+
+// Characters the decoder could not receive are stored as '*'
+int count_bad_characters(const char *message) {
+        int n = 0;
+        if (message == NULL) return 0;
+        for (; *message; message++) if (*message == '*') n++;
+        return n;
+}
+
+// 1 when the character error rate is below 4 % and the message reached its NNNN
+int satisfactorily_received(int complete, int errors, int length) {
+        return complete && length > 0 && errors * 100 < 4 * length;
+}
+
+// 2 satisfactory, 1 complete with too many errors, 0 cut short
+static int quality(int complete, int errors, int length) {
+        return satisfactorily_received(complete, errors, length) ? 2 : complete ? 1 : 0;
+}
+
+// 1 when the new copy is worth more than the stored one
+int better_copy(int new_complete, int new_errors, int new_len, int old_complete, int old_errors, int old_len) {
+        int qn = quality(new_complete, new_errors, new_len), qo = quality(old_complete, old_errors, old_len);
+        if (qn != qo) return qn > qo;
+        if (qn == 0) return new_len - new_errors > old_len - old_errors;      // cut short: the one with more good text
+        return (long) new_errors * old_len < (long) old_errors * new_len;     // complete: the lower error rate
+}
+
+// Each B1 letter owns ten minutes every four hours: A at 0000, B at 0010 ... X at 0350
+// (NAVTEX Manual, 5.2.5 and table 2). Minute of that slot within the four hours, or -1.
+int slot_minute(char b1) {
+        return (b1 >= 'A' && b1 <= 'X') ? (b1 - 'A') * 10 : -1;
+}
+
+// 1 when a message stored at that UTC time ("YYYY-MM-DD HH:MM") arrived within the slot of its
+// station: the message is stored when it ends, up to ten minutes after the slot starts, and
+// a broadcast may overrun a little. 0 when it did not; -1 when it cannot be told.
+int in_own_slot(char b1, const char *timestamp) {
+        int h, m, slot = slot_minute(b1), offset;
+        if (slot < 0 || timestamp == NULL || strlen(timestamp) != 16 || sscanf(timestamp + 11, "%2d:%2d", &h, &m) != 2) return -1;
+        offset = ((h * 60 + m) % 240 - slot + 240) % 240;
+        return offset <= 13;
+}
+
 int add_message(char *bbbb, char *message, int freq, int complete) {
         char timestamp_str[TS_SIZE];
         sqlite3 *db;
         sqlite3_stmt *stmt;
         int rc;
         int keep_existing = 0;
+        int errors, length;
+        const char *name = freq == 4209 ? "4209.5" : freq == 518 ? "518" : "490";
 
         if (bbbb == NULL || message == NULL || strlen(bbbb) != 4 || message[0] == '\0') return -1;
+        errors = count_bad_characters(message);
+        length = (int) strlen(message);
 
         get_current_timestamp(timestamp_str);
 
@@ -126,22 +185,36 @@ int add_message(char *bbbb, char *message, int freq, int complete) {
         }
 
         // What is already stored for this message identity on this frequency?
-        if (sqlite3_prepare_v2(db, "select complete, length(message), timestamp from messages where bbbb = ?1 and freq = ?2 order by id desc limit 1", -1, &stmt, NULL) == SQLITE_OK) {
+        if (sqlite3_prepare_v2(db, "select complete, length(message), timestamp, coalesce(errors,0), id from messages where bbbb = ?1 and freq = ?2 order by id desc limit 1", -1, &stmt, NULL) == SQLITE_OK) {
                 sqlite3_bind_text(stmt, 1, bbbb, -1, SQLITE_STATIC);
                 sqlite3_bind_int(stmt, 2, freq);
                 if (sqlite3_step(stmt) == SQLITE_ROW && sqlite3_column_text(stmt, 2) != NULL) {
                         int old_complete = sqlite3_column_type(stmt, 0) == SQLITE_NULL ? 1 : sqlite3_column_int(stmt, 0);
                         int old_len = sqlite3_column_int(stmt, 1);
+                        int old_errors = sqlite3_column_int(stmt, 3);
+                        int old_id = sqlite3_column_int(stmt, 4);
                         long age = calculate_time_difference((char *) sqlite3_column_text(stmt, 2));
-                        if (!complete && age < KEEP_COMPLETE_COPY_AGE &&
-                            (old_complete || old_len >= (int) strlen(message)))
-                                keep_existing = 1;   // a cut reception is not better than what we have
+                        int always = bbbb[2] == '0' && bbbb[3] == '0';       // B3B4 = 00: always shown
+
+                        if (age < IDENTITY_MEMORY_AGE && !always) {
+                                if (satisfactorily_received(old_complete, old_errors, old_len)) keep_existing = 1;          // a repeat of the broadcast
+                                else if (!better_copy(complete, errors, length, old_complete, old_errors, old_len)) keep_existing = 1;
+                        }
+                        if (keep_existing) {
+                                // it is still being broadcast: remember when it was last heard
+                                sqlite3_stmt *up;
+                                if (sqlite3_prepare_v2(db, "update messages set heard = strftime('%s','now') where id = ?1", -1, &up, NULL) == SQLITE_OK) {
+                                        sqlite3_bind_int(up, 1, old_id);
+                                        sqlite3_step(up);
+                                        sqlite3_finalize(up);
+                                }
+                        }
                 }
                 sqlite3_finalize(stmt);
         }
         if (keep_existing) {
                 sqlite3_close(db);
-                printf("%s kHz: %s received incomplete (%d characters), keeping the stored copy\n", freq == 4209 ? "4209.5" : freq == 518 ? "518" : "490", bbbb, (int) strlen(message));
+                printf("%s kHz: %s received again (%s, %d characters, %d bad), keeping the stored copy\n", name, bbbb, complete ? "complete" : "incomplete", length, errors);
                 return 0;
         }
 
@@ -151,20 +224,22 @@ int add_message(char *bbbb, char *message, int freq, int complete) {
 	sqlite3_step(stmt); 
         sqlite3_finalize(stmt);
 
-	sqlite3_prepare_v2(db, "insert into messages (bbbb,message,timestamp,age,freq,complete) values ( ?1 , ?2 , ?3 ,'NEW',?4,?5)", -1, &stmt, NULL);
+	sqlite3_prepare_v2(db, "insert into messages (bbbb,message,timestamp,age,freq,complete,errors,deleted,heard) values ( ?1 , ?2 , ?3 ,'NEW',?4,?5,?6,0,strftime('%s','now'))", -1, &stmt, NULL);
         sqlite3_bind_text(stmt, 1, bbbb,          -1, SQLITE_STATIC);
         sqlite3_bind_text(stmt, 2, message,       -1, SQLITE_STATIC);
         sqlite3_bind_text(stmt, 3, timestamp_str, -1, SQLITE_STATIC);
         sqlite3_bind_int(stmt, 4, freq);
         sqlite3_bind_int(stmt, 5, complete ? 1 : 0);
+        sqlite3_bind_int(stmt, 6, errors);
         rc = sqlite3_step(stmt);
         sqlite3_finalize(stmt);
 	sqlite3_close(db);
         if (rc != SQLITE_DONE) {
-                printf("%s kHz: %s could not be stored\n", freq == 4209 ? "4209.5" : freq == 518 ? "518" : "490", bbbb);
+                printf("%s kHz: %s could not be stored\n", name, bbbb);
                 return -2;
         }
-        printf("%s kHz: %s stored, %s, %d characters\n", freq == 4209 ? "4209.5" : freq == 518 ? "518" : "490", bbbb, complete ? "complete" : "incomplete", (int) strlen(message));
+        printf("%s kHz: %s stored, %s, %d characters, %d bad (%.1f %%)%s\n", name, bbbb, complete ? "complete" : "incomplete", length, errors, 100.0 * errors / length,
+               satisfactorily_received(complete, errors, length) ? "" : ", not satisfactorily received");
         return 0;
 }
 
@@ -188,7 +263,7 @@ cJSON *json = cJSON_CreateArray();
         }
 
         //sqlite3_prepare_v2(db, "select id,bbbb,timestamp,age,freq from messages order by timestamp desc", -1, &stmt, NULL);
-        sqlite3_prepare_v2(db, "select messages.id as id,bbbb,timestamp,age,freq,complete from messages, config AS CO1, config AS CO2 where (freq=518 and CO1.tag='stations518' and instr(CO1.value,substr(bbbb,1,1))>0 and CO2.tag='messages518' and instr(CO2.value,substr(bbbb,2,1)) > 0) OR  (freq=490 and CO1.tag='stations490' and instr(CO1.value,substr(bbbb,1,1))>0 and CO2.tag='messages490' and instr(CO2.value,substr(bbbb,2,1)) > 0) order by timestamp desc", -1, &stmt, NULL);
+        sqlite3_prepare_v2(db, "select messages.id as id,bbbb,timestamp,age,freq,complete from messages, config AS CO1, config AS CO2 where coalesce(deleted,0)=0 and ((freq=518 and CO1.tag='stations518' and instr(CO1.value,substr(bbbb,1,1))>0 and CO2.tag='messages518' and instr(CO2.value,substr(bbbb,2,1)) > 0) OR  (freq=490 and CO1.tag='stations490' and instr(CO1.value,substr(bbbb,1,1))>0 and CO2.tag='messages490' and instr(CO2.value,substr(bbbb,2,1)) > 0)) order by timestamp desc", -1, &stmt, NULL);
 
 
 
@@ -290,15 +365,23 @@ return result;
 
 
 
-void purge_old_messages() {
+// Hours a message is kept after it was last heard: the "retention_hours" setting,
+// never less than the 72 hours its identity has to be remembered.
+long retention_seconds(void) {
+        char v[16];
+        long h = 72;
+        if (get_setting("retention_hours", v, sizeof(v)) && v[0] != '\0') h = atol(v);
+        if (h < 72) h = 72;
+        if (h > 8760) h = 8760;
+        return h * 3600;
+}
 
+// A message goes when it has not been heard for the retention time. One the user
+// deleted goes as soon as its identity no longer has to be remembered.
+void purge_old_messages() {
         sqlite3 *db;
         sqlite3_stmt *stmt;
-	int purge_list[100];
-	int pl_index;
-	long td;
-	int i;
-	int rc;
+        long keep = retention_seconds();
 
 	open_db(&db);
         if (db == NULL)
@@ -306,34 +389,116 @@ void purge_old_messages() {
                 printf("Failed to open DB\n");
 		return;
         }
-        pl_index=0;
-        rc = sqlite3_prepare_v2(db, "select id,bbbb,timestamp from messages order by timestamp asc", -1, &stmt, NULL);
-	if (rc != SQLITE_OK) {
-       		fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db));
-        	sqlite3_close(db);
-        	return;
-    	}
-
-        while ((sqlite3_step(stmt) == SQLITE_ROW) && (pl_index<(99))) {
-        	td = calculate_time_difference((char*)sqlite3_column_text(stmt, 2) );
-		if (td > MESSAGE_PURGE_AGE) {
-			purge_list[pl_index]=sqlite3_column_int(stmt, 0);
-			pl_index++;
-		}
-        }
-        sqlite3_finalize(stmt);
-	i=0;
-	while ( i < pl_index) {
-        	sqlite3_prepare_v2(db, "delete from messages where id = ?1 ", -1, &stmt, NULL);
-		sqlite3_bind_int(stmt, 1,purge_list[i]);
-		sqlite3_step(stmt); 
-		sqlite3_finalize(stmt);
-		i++;
+        if (sqlite3_prepare_v2(db, "delete from messages where"
+                                   " (strftime('%s','now') - coalesce(heard, strftime('%s', timestamp))) > ?1"
+                                   " or (coalesce(deleted,0) = 1 and (strftime('%s','now') - strftime('%s', timestamp)) > ?2)", -1, &stmt, NULL) == SQLITE_OK) {
+                sqlite3_bind_int64(stmt, 1, (sqlite3_int64) keep);
+                sqlite3_bind_int64(stmt, 2, (sqlite3_int64) IDENTITY_MEMORY_AGE);
+                sqlite3_step(stmt);
+                sqlite3_finalize(stmt);
         }
 	sqlite3_close(db);
+}
 
+// Hides one message (id > 0) or all of them (id == 0). The rows stay until purge_old_messages()
+// removes them, so a repeat of the broadcast does not bring them back. Returns how many, or -1.
+int delete_messages(unsigned int id) {
+        sqlite3 *db;
+        sqlite3_stmt *stmt;
+        int n = -1;
 
-return;
+        open_db(&db);
+        if (db == NULL) return -1;
+        if (sqlite3_prepare_v2(db, id ? "update messages set deleted = 1, age = '' where id = ?1 and coalesce(deleted,0) = 0"
+                                      : "update messages set deleted = 1, age = '' where coalesce(deleted,0) = 0", -1, &stmt, NULL) == SQLITE_OK) {
+                if (id) sqlite3_bind_int64(stmt, 1, (sqlite3_int64) id);
+                if (sqlite3_step(stmt) == SQLITE_DONE) n = sqlite3_changes(db);
+                sqlite3_finalize(stmt);
+        }
+        sqlite3_close(db);
+        return n;
+}
+
+// Appends to a growing buffer; returns 0 when memory runs out
+static int grow(char **buf, size_t *len, size_t *cap, const char *text, size_t n) {
+        if (*len + n + 1 > *cap) {
+                size_t want = (*cap + n + 1) * 2;
+                char *nb = (char *) realloc(*buf, want);
+                if (nb == NULL) return 0;
+                *buf = nb; *cap = want;
+        }
+        memcpy(*buf + *len, text, n);
+        *len += n;
+        (*buf)[*len] = '\0';
+        return 1;
+}
+
+// Every message not deleted, oldest first, as text or as CSV (RFC 4180). freq 0 = all.
+// To be freed by the caller; NULL on error.
+char *export_messages(int csv, int freq) {
+        sqlite3 *db;
+        sqlite3_stmt *stmt;
+        char *out = NULL;
+        size_t len = 0, cap = 0;
+        char line[256];
+        int ok = 1;
+
+        purge_old_messages();
+        open_db(&db);
+        if (db == NULL) return NULL;
+        if (csv) {
+                static const char header[] = "id,bbbb,khz,received_utc,last_heard_utc,complete,characters,bad_characters,satisfactory,message\r\n";
+                ok = grow(&out, &len, &cap, header, sizeof(header) - 1);
+        }
+        else ok = grow(&out, &len, &cap, "", 0);
+        if (ok && sqlite3_prepare_v2(db, "select id,bbbb,freq,timestamp,complete,coalesce(errors,0),message,"
+                                         "strftime('%Y-%m-%d %H:%M', coalesce(heard, strftime('%s', timestamp)), 'unixepoch')"
+                                         " from messages where coalesce(deleted,0) = 0 and (?1 = 0 or freq = ?1) order by id asc", -1, &stmt, NULL) == SQLITE_OK) {
+                sqlite3_bind_int(stmt, 1, freq);
+                while (ok && sqlite3_step(stmt) == SQLITE_ROW) {
+                        const char *bbbb = (const char *) sqlite3_column_text(stmt, 1);
+                        const char *ts = (const char *) sqlite3_column_text(stmt, 3);
+                        const char *text = (const char *) sqlite3_column_text(stmt, 6);
+                        const char *heard = (const char *) sqlite3_column_text(stmt, 7);
+                        int f = sqlite3_column_int(stmt, 2);
+                        int complete = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? 1 : sqlite3_column_int(stmt, 4) != 0;
+                        int errors = sqlite3_column_int(stmt, 5);
+                        int n;
+                        const char *khz = f == 4209 ? "4209.5" : f == 490 ? "490" : "518";
+
+                        if (bbbb == NULL || ts == NULL || text == NULL) continue;
+                        n = (int) strlen(text);
+                        if (csv) {
+                                const char *p;
+                                snprintf(line, sizeof(line), "%d,%.4s,%s,%.16s,%.16s,%d,%d,%d,%d,\"", sqlite3_column_int(stmt, 0), bbbb, khz, ts, heard ? heard : ts,
+                                         complete, n, errors, satisfactorily_received(complete, errors, n));
+                                ok = grow(&out, &len, &cap, line, strlen(line));
+                                for (p = text; ok && *p; p++) {
+                                        // a cell that starts with = + - @ would be run as a formula by a spreadsheet
+                                        if (p == text && strchr("=+-@", *p) != NULL) ok = grow(&out, &len, &cap, "'", 1);
+                                        if (*p == '"') ok = ok && grow(&out, &len, &cap, "\"\"", 2);
+                                        else if (*p != '\r') ok = ok && grow(&out, &len, &cap, p, 1);
+                                }
+                                ok = ok && grow(&out, &len, &cap, "\"\r\n", 3);
+                        } else {
+                                snprintf(line, sizeof(line), "==== %.4s  %s kHz  received %.16s UTC  last heard %.16s UTC  %s, %d characters, %d bad ====\r\n",
+                                         bbbb, khz, ts, heard ? heard : ts, complete ? "complete" : "cut short", n, errors);
+                                ok = grow(&out, &len, &cap, line, strlen(line));
+                                {
+                                        const char *p;
+                                        for (p = text; ok && *p; p++) {
+                                                if (*p == '\n') ok = grow(&out, &len, &cap, "\r\n", 2);
+                                                else if (*p != '\r') ok = grow(&out, &len, &cap, p, 1);
+                                        }
+                                }
+                                ok = ok && grow(&out, &len, &cap, "\r\n\r\n", 4);
+                        }
+                }
+                sqlite3_finalize(stmt);
+        }
+        sqlite3_close(db);
+        if (!ok) { free(out); return NULL; }
+        return out;
 }
 
 
@@ -351,7 +516,7 @@ char *get_message_text(unsigned int m_id) {
         }
         json = cJSON_CreateObject();
 
-        if (sqlite3_prepare_v2(db, "select message from messages where id = ?1", -1, &stmt, NULL) == SQLITE_OK) {
+        if (sqlite3_prepare_v2(db, "select message from messages where id = ?1 and coalesce(deleted,0) = 0", -1, &stmt, NULL) == SQLITE_OK) {
                 sqlite3_bind_int64(stmt, 1, (sqlite3_int64) m_id);
                 if (sqlite3_step(stmt) == SQLITE_ROW && sqlite3_column_text(stmt, 0) != NULL) {
                         cJSON_AddStringToObject(json, "message", (const char *) sqlite3_column_text(stmt, 0));
@@ -480,6 +645,13 @@ static void iso_timestamp(const char *stored, char *out, size_t out_size)
 // full text. Nothing is filtered and nothing is marked as read: this is meant
 // for programs that keep their own copy and ask again with the last id they saw.
 char *get_messages_since(unsigned int since_id, int limit) {
+        return get_messages_changed(since_id, 0, limit);
+}
+
+// The same, and also the messages heard again after heard_after (unix time; 0 = none):
+// a station repeats what is still in force, and a program that keeps its own copy
+// can tell from that which messages are still being broadcast.
+char *get_messages_changed(unsigned int since_id, long heard_after, int limit) {
         cJSON *json;
         sqlite3 *db;
         sqlite3_stmt *stmt;
@@ -490,9 +662,11 @@ char *get_messages_since(unsigned int since_id, int limit) {
         open_db(&db);
         if (db == NULL) return NULL;
         json = cJSON_CreateArray();
-        if (sqlite3_prepare_v2(db, "select id,bbbb,freq,timestamp,complete,message,age from messages where id > ?1 order by id asc limit ?2", -1, &stmt, NULL) == SQLITE_OK) {
+        if (sqlite3_prepare_v2(db, "select id,bbbb,freq,timestamp,complete,message,age,coalesce(errors,0),coalesce(heard, strftime('%s', timestamp))"
+                                   " from messages where coalesce(deleted,0) = 0 and (id > ?1 or (?3 > 0 and heard > ?3)) order by id asc limit ?2", -1, &stmt, NULL) == SQLITE_OK) {
                 sqlite3_bind_int64(stmt, 1, (sqlite3_int64) since_id);
                 sqlite3_bind_int(stmt, 2, limit);
+                sqlite3_bind_int64(stmt, 3, (sqlite3_int64) heard_after);
                 while (sqlite3_step(stmt) == SQLITE_ROW) {
                         const char *bbbb = (const char *) sqlite3_column_text(stmt, 1);
                         const char *text = (const char *) sqlite3_column_text(stmt, 5);
@@ -511,6 +685,20 @@ char *get_messages_since(unsigned int since_id, int limit) {
                         iso_timestamp((const char *) sqlite3_column_text(stmt, 3), iso, sizeof(iso));
                         cJSON_AddStringToObject(m, "received", iso);
                         cJSON_AddBoolToObject(m, "complete", sqlite3_column_type(stmt, 4) == SQLITE_NULL ? 1 : sqlite3_column_int(stmt, 4) != 0);
+                        {
+                                int errors = sqlite3_column_int(stmt, 7);
+                                int n = (int) strlen(text);
+                                int complete = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? 1 : sqlite3_column_int(stmt, 4) != 0;
+                                int slot = in_own_slot(bbbb[0], (const char *) sqlite3_column_text(stmt, 3));
+                                cJSON_AddNumberToObject(m, "characters", n);
+                                cJSON_AddNumberToObject(m, "errors", errors);
+                                // character error rate below 4 % and complete (IMO MSC.148(77), 6.2.3)
+                                cJSON_AddBoolToObject(m, "satisfactory", satisfactorily_received(complete, errors, n));
+                                // last time the broadcast was received, unix time
+                                cJSON_AddNumberToObject(m, "heard", (double) sqlite3_column_int64(stmt, 8));
+                                // received within the ten minutes of its B1 letter
+                                if (slot >= 0) cJSON_AddBoolToObject(m, "in_slot", slot);
+                        }
                         cJSON_AddStringToObject(m, "message", text);
                         // not yet opened in the web interface
                         cJSON_AddBoolToObject(m, "unread", sqlite3_column_text(stmt, 6) != NULL && strcmp((const char *) sqlite3_column_text(stmt, 6), "NEW") == 0);
@@ -618,6 +806,17 @@ static int valid_slots(const char *v) {
         return 1;
 }
 
+// "host:port" with a numeric IPv4 address or a host name, or empty
+static int valid_host_port(const char *v) {
+        const char *colon = strrchr(v, ':');
+        int port;
+        if (v[0] == '\0') return 1;
+        if (colon == NULL || colon == v || !all_of(v, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.-:", 80)) return 0;
+        if (strchr(v, ':') != colon || !all_of(colon + 1, "0123456789", 5) || colon[1] == '\0') return 0;
+        port = atoi(colon + 1);
+        return port >= 1 && port <= 65535;
+}
+
 // "lat,lon" in decimal degrees
 static int valid_position(const char *v) {
         double lat, lon;
@@ -634,6 +833,11 @@ int valid_setting(const char *tag, const char *value) {
         if (tag == NULL || value == NULL) return 0;
         if (strcmp(tag, "position") == 0) return valid_position(value);
         if (strcmp(tag, "position_source") == 0) return one_of(value, "gps", "manual", NULL, NULL);
+        // hours a message is kept after it was last heard: 72 (the time its identity is remembered) to a year
+        if (strcmp(tag, "retention_hours") == 0) return all_of(value, "0123456789", 4) && value[0] != '\0' && atoi(value) >= 72 && atoi(value) <= 8760;
+        // NMEA 0183 output (NRX sentences): UDP destination "host:port" and TCP server port; empty or 0 = off
+        if (strcmp(tag, "nrx.udp") == 0) return valid_host_port(value);
+        if (strcmp(tag, "nrx.tcp") == 0) return value[0] != '\0' && all_of(value, "0123456789", 5) && (atoi(value) == 0 || (atoi(value) >= 1024 && atoi(value) <= 65535));
         if ((strncmp(tag, "rx1.", 4) != 0 && strncmp(tag, "rx2.", 4) != 0)) return 0;
         key = tag + 4;
         if (strcmp(key, "enabled") == 0 || strcmp(key, "bias") == 0) return one_of(value, "0", "1", NULL, NULL);
