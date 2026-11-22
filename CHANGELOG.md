@@ -2,6 +2,12 @@
 
 Fork EA7JRS/Navtex del receptor NAVTEX de bartelvdh. Las entradas dicen también qué se probó y qué no. Lo descrito en una fase puede haber cambiado en las posteriores (por ejemplo, los servicios y sus ajustes): el estado actual es el del [README](README.md).
 
+## [1.8.0] - 2026-11-22
+
+- **KiwiSDR como receptor.** Tercer tipo de equipo para cada receptor: un KiwiSDR de la red (pestaña Receptores, o `-K equipo[:puerto]` y `-W contraseña`). En 518 y 490 kHz le toma dos canales a la vez (da 12 kHz por canal) y los suma donde el demodulador los espera; en 4209,5 kHz, uno. Ajustes `rxN.kiwi_host`, `rxN.kiwi_port`, `rxN.kiwi_pass`. **Probado** contra un KiwiSDR de pega que emite una grabación real de NAVTEX: el mensaje se descodifica y se guarda. **Sin probar con un KiwiSDR de verdad.**
+- **Salida a Signal K** (y con él a OpenPlotter): ajuste nuevo *Signal K por UDP* (`nrx.signalk`, `equipo:puerto`). Cada mensaje nuevo sale como un delta en `communication.navtex.<frecuencia>.<identidad>` (ruta propia: Signal K no tiene una para NAVTEX) y la alarma de búsqueda y salvamento como aviso normalizado en `notifications.navtex.sar`. El README explica cómo recibirlo en Signal K y qué llega a OpenCPN por NMEA 0183. **Sin probar contra un servidor Signal K ni contra OpenCPN.**
+- `make check`: 124 comprobaciones.
+
 ## [1.7.3] - 2026-11-22
 
 - **Cabecera como la de APRS LoRa+**: su logotipo, la versión bajo el nombre y la raya de verde a cian.

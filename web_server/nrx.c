@@ -13,6 +13,7 @@
  * followed, or a request for the stored messages) and its query, CRQ.
  */
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -422,8 +423,75 @@ nrx_sentences (const char *bbbb, int freq, const char *received, const char *mes
 
 /* ------------------------------------------------------------------ sender */
 
+/* ---- Signal K */
+
+static int
+iso_time_ok (const char *t)
+{
+  return t != NULL && strlen (t) == 20 && t[4] == '-' && t[7] == '-' && t[10] == 'T' && t[13] == ':' && t[16] == ':' && t[19] == 'Z';
+}
+
+static char *
+delta_of (const char *timestamp, const char *path, cJSON *value)
+{
+  cJSON *d = cJSON_CreateObject (), *ups = cJSON_AddArrayToObject (d, "updates"), *u = cJSON_CreateObject ();
+  cJSON *src = cJSON_AddObjectToObject (u, "source"), *vals, *v = cJSON_CreateObject ();
+  char *s, *r = NULL;
+  cJSON_AddItemToArray (ups, u);
+  cJSON_AddStringToObject (src, "label", "navtex");
+  cJSON_AddStringToObject (src, "type", "NAVTEX");
+  cJSON_AddStringToObject (u, "timestamp", timestamp);
+  vals = cJSON_AddArrayToObject (u, "values");
+  cJSON_AddItemToArray (vals, v);
+  cJSON_AddStringToObject (v, "path", path);
+  cJSON_AddItemToObject (v, "value", value);
+  s = cJSON_PrintUnformatted (d);
+  if (s != NULL)
+    {
+      size_t n = strlen (s);
+      r = malloc (n + 2);
+      if (r != NULL) { memcpy (r, s, n); r[n] = '\n'; r[n + 1] = '\0'; }
+      cJSON_free (s);
+    }
+  cJSON_Delete (d);
+  return r;
+}
+
+char *
+signalk_message (const char *bbbb, int freq, const char *received, const char *message, int complete)
+{
+  char path[64], letter[2] = { 0, 0 };
+  cJSON *v;
+  if (bbbb == NULL || message == NULL || strlen (bbbb) != 4 || !isupper ((unsigned char) bbbb[0]) || !isupper ((unsigned char) bbbb[1])
+      || !isdigit ((unsigned char) bbbb[2]) || !isdigit ((unsigned char) bbbb[3]) || (freq != 490 && freq != 518 && freq != 4209) || !iso_time_ok (received))
+    return NULL;
+  snprintf (path, sizeof (path), "communication.navtex.%d.%s", freq, bbbb);
+  v = cJSON_CreateObject ();
+  cJSON_AddStringToObject (v, "id", bbbb);
+  letter[0] = bbbb[0]; cJSON_AddStringToObject (v, "station", letter);
+  letter[0] = bbbb[1]; cJSON_AddStringToObject (v, "subject", letter);
+  cJSON_AddNumberToObject (v, "frequency", freq == 4209 ? 4209500 : freq * 1000);       /* Hz, as Signal K wants */
+  cJSON_AddStringToObject (v, "received", received);
+  cJSON_AddBoolToObject (v, "complete", complete);
+  cJSON_AddStringToObject (v, "text", message);
+  return delta_of (received, path, v);
+}
+
+char *
+signalk_alarm (int active, const char *now)
+{
+  cJSON *v, *m;
+  if (!iso_time_ok (now)) return NULL;
+  v = cJSON_CreateObject ();
+  cJSON_AddStringToObject (v, "state", active ? "alarm" : "normal");
+  m = cJSON_AddArrayToObject (v, "method");
+  if (active) { cJSON_AddItemToArray (m, cJSON_CreateString ("visual")); cJSON_AddItemToArray (m, cJSON_CreateString ("sound")); }
+  cJSON_AddStringToObject (v, "message", active ? "NAVTEX: search and rescue information" : "NAVTEX: search and rescue information, acknowledged");
+  return delta_of (now, "notifications.navtex.sar", v);
+}
+
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-static char cur_udp[96];
+static char cur_udp[96], cur_sk[96];
 static int cur_tcp, n_clients;
 static long sent_messages, last_id = -1;
 static char last_error[120];
@@ -682,13 +750,13 @@ sender (void *arg)
 {
   int i;
   int alarm_was = 0;
-  time_t last_alr = 0, last_bam = 0;
+  time_t last_alr = 0, last_bam = 0, last_sk = 0;
   int bam_revision = 1, bam_seq = 0, bam_was = -1;
   (void) arg;
   for (i = 0; i < MAX_CLIENTS; i++) clients[i] = -1;
   for (;;)
     {
-      char udp[96], tcp[16], format[16], bam[8];
+      char udp[96], tcp[16], format[16], bam[8], sk[96];
       int port, count = 0, iec, alarms;
       char *ml;
       cJSON *list, *m;
@@ -697,6 +765,7 @@ sender (void *arg)
       get_setting ("nrx.tcp", tcp, sizeof (tcp));
       get_setting ("nrx.format", format, sizeof (format));
       get_setting ("nrx.bam", bam, sizeof (bam));
+      get_setting ("nrx.signalk", sk, sizeof (sk));
       iec = strcmp (format, "iec") == 0;
       out_iec = iec;
       port = atoi (tcp);
@@ -722,9 +791,15 @@ sender (void *arg)
           pthread_mutex_lock (&lock);
           if ((long) id->valuedouble > last_id) last_id = (long) id->valuedouble;
           pthread_mutex_unlock (&lock);
-          if ((udp[0] == '\0' && port == 0) || !cJSON_IsString (bbbb) || !cJSON_IsNumber (freq) || !cJSON_IsString (rec) || !cJSON_IsString (text)) continue;
+          if ((udp[0] == '\0' && port == 0 && sk[0] == '\0') || !cJSON_IsString (bbbb) || !cJSON_IsNumber (freq) || !cJSON_IsString (rec) || !cJSON_IsString (text)) continue;
           /* "2026-11-22T07:12:00Z" -> "2026-11-22 07:12" */
           snprintf (when, sizeof (when), "%.10s %.5s", rec->valuestring, strlen (rec->valuestring) >= 16 ? rec->valuestring + 11 : "");
+          if (sk[0] != '\0')
+            {
+              char *d = signalk_message (bbbb->valuestring, (int) freq->valuedouble, rec->valuestring, text->valuestring, !cJSON_IsFalse (complete));
+              if (d != NULL) { set_error (NULL, NULL); send_udp (sk, d); free (d); if (udp[0] == '\0' && port == 0) count++; }
+            }
+          if (udp[0] == '\0' && port == 0) continue;
           s = nrx_sentences (bbbb->valuestring, (int) freq->valuedouble, when, text->valuestring, iec, out_seq, !cJSON_IsFalse (complete));
           out_seq = (out_seq + 1) % 100;
           if (s == NULL) continue;
@@ -746,6 +821,17 @@ sender (void *arg)
           if (udp[0] != '\0') send_udp (udp, alr);
           if (port != 0) send_tcp (alr, strlen (alr));
           last_alr = time (NULL);
+        }
+      /* the same alarm for Signal K: a notification, again every 30 s while it lasts (a server that
+         starts later learns of it) and once when it is over */
+      if (sk[0] != '\0' && ((alarms > 0 && time (NULL) - last_sk >= 30) || (alarms == 0 && alarm_was)))
+        {
+          char now[24]; time_t t = time (NULL); struct tm tm; char *d;
+          gmtime_r (&t, &tm);
+          strftime (now, sizeof (now), "%Y-%m-%dT%H:%M:%SZ", &tm);
+          d = signalk_alarm (alarms > 0, now);
+          if (d != NULL) { send_udp (sk, d); free (d); }
+          last_sk = time (NULL);
         }
       alarm_was = alarms > 0;
 
@@ -778,6 +864,7 @@ sender (void *arg)
 
       pthread_mutex_lock (&lock);
       snprintf (cur_udp, sizeof (cur_udp), "%s", udp);
+      snprintf (cur_sk, sizeof (cur_sk), "%s", sk);
       cur_tcp = listener >= 0 ? listener_port : 0;
       for (i = 0, n_clients = 0; i < MAX_CLIENTS; i++) if (clients[i] >= 0) n_clients++;
       sent_messages += count;
@@ -802,6 +889,7 @@ nrx_json (void)
 
   pthread_mutex_lock (&lock);
   cJSON_AddStringToObject (j, "udp", cur_udp);
+  cJSON_AddStringToObject (j, "signalk", cur_sk);
   cJSON_AddNumberToObject (j, "tcp", cur_tcp);
   cJSON_AddNumberToObject (j, "clients", n_clients);
   cJSON_AddNumberToObject (j, "sent", (double) sent_messages);

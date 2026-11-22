@@ -48,7 +48,7 @@ void init_fir2_wrapper();
 
 short debug_mode;
 
-struct iq_options iq_opt = { 0, 'A', 0, NULL, -1, 0, -1, 0, NULL, 0 };
+struct iq_options iq_opt = { 0, 'A', 0, NULL, -1, 0, -1, 0, NULL, 0, NULL, 8073, NULL };
 
 long iq_centre_hz(void)
 {
@@ -275,6 +275,7 @@ void consume_loop(void)
                 last_heartbeat = last_sample_time;
                 status_now("receiver_alive");
                 status_text("state", "receiving");
+                if (kiwi_has_position) { char kp[48]; snprintf(kp, sizeof(kp), "%.3f,%.3f", kiwi_lat, kiwi_lon); status_text("kiwi_position", kp); }
             }
         }
         // Did somebody change this receiver's settings, or is it time to change band?
@@ -678,6 +679,7 @@ void init_dsp()
 static int instance = 0;              // 0: options from the command line; 1 or 2: settings "rxN.*"
 static char instance_source[16];
 static char instance_serial[40];
+static char instance_kiwi_host[84], instance_kiwi_pass[44];
 static char instance_signature[512];  // what the current run was started with
 
 static int run_source(const char *source)
@@ -685,6 +687,7 @@ static int run_source(const char *source)
    if (strcmp(source, "sdrplay") == 0)      return sdrplay_source_run();
    if (strcmp(source, "rtlsdr") == 0)       return rtlsdr_source_run();
    if (strcmp(source, "file") == 0)         return file_source_run();
+   if (strcmp(source, "kiwi") == 0)         return kiwi_source_run();
    return -1;
 }
 
@@ -734,6 +737,14 @@ static int read_instance(char *signature, size_t signature_size, int *want_hf)
     instance_setting("upconv", upconv, sizeof(upconv));
     instance_setting("gain", gain, sizeof(gain));
     instance_setting("ppm", ppm, sizeof(ppm));
+    {
+        char kport[8];
+        instance_setting("kiwi_host", instance_kiwi_host, sizeof(instance_kiwi_host));
+        instance_setting("kiwi_port", kport, sizeof(kport));
+        instance_setting("kiwi_pass", instance_kiwi_pass, sizeof(instance_kiwi_pass));
+        iq_opt.kiwi_host = instance_kiwi_host; iq_opt.kiwi_password = instance_kiwi_pass;
+        iq_opt.kiwi_port = atoi(kport) > 0 ? atoi(kport) : 8073;
+    }
 
     if (instance_source[0] == '\0')
 #ifdef HAVE_LIBSDRPLAY_API
@@ -752,8 +763,8 @@ static int read_instance(char *signature, size_t signature_size, int *want_hf)
     iq_opt.rtl_gain_tenths = (gain[0] >= '0' && gain[0] <= '9') ? (int) (atof(gain) * 10.0 + 0.5) : -1;
     iq_opt.rtl_ppm = atoi(ppm);
 
-    snprintf(signature, signature_size, "%s|%s|%d|%s|%s|%s|%s|%s|%s|%s", enabled, instance_source, *want_hf,
-             port, bias, instance_serial, direct, upconv, gain, ppm);
+    snprintf(signature, signature_size, "%s|%s|%d|%s|%s|%s|%s|%s|%s|%s|%s|%d|%s", enabled, instance_source, *want_hf,
+             port, bias, instance_serial, direct, upconv, gain, ppm, instance_kiwi_host, iq_opt.kiwi_port, instance_kiwi_pass);
     return strcmp(enabled, "1") == 0;
 }
 
@@ -815,8 +826,10 @@ static int run_instance(void)
         {
             // unplugged, in use by another program, or not built in: try again later
             status_text("state", "unavailable");
-            printf("Receiver %d: not available, trying again in 15 s\n", instance);
-            wait_seconds(15);
+            // a KiwiSDR that is full or refuses is not asked again every few seconds
+            int again = strcmp(instance_source, "kiwi") == 0 ? 60 : 15;
+            printf("Receiver %d: not available, trying again in %d s\n", instance, again);
+            wait_seconds(again);
         }
     }
     status_text("state", "stopped");
@@ -829,7 +842,10 @@ static void usage(const char *prog)
 "Usage: %s [options]\n"
 "  -n number   receiver 1 or 2: take every setting from the web interface and follow\n"
 "              its changes without restarting (this is what the services use)\n"
-"  -s source   sdrplay | rtlsdr | file   (default: sdrplay when built in, else rtlsdr)\n"
+"  -s source   sdrplay | rtlsdr | kiwi | file   (default: sdrplay when built in, else rtlsdr)\n"
+"  -K host[:port]  a KiwiSDR on the network as the receiver (port 8073); on medium wave it\n"
+"              takes two of its channels, one on 518 and one on 490 kHz\n"
+"  -W password     its password, when it asks for one\n"
 "  -B band     mf: 518 and 490 kHz at the same time (default)\n"
 "              hf: 4209.5 kHz only\n"
 "  -b          bias T on: power an active antenna through the coax\n"
@@ -868,7 +884,7 @@ int main(int argc, char *argv[])
   // character by character only when somebody is watching
   navtex_verbose = isatty(STDOUT_FILENO) ? 1 : 0;
 
-  while ((c = getopt (argc, argv, "bdhtvqn:s:B:p:i:S:D:u:g:P:f:")) != -1) {
+  while ((c = getopt (argc, argv, "bdhtvqn:s:B:p:i:S:D:u:g:P:f:K:W:")) != -1) {
     switch (c)
       {
       case 'b':
@@ -920,6 +936,16 @@ int main(int argc, char *argv[])
         break;
       case 'S':
         iq_opt.rtl_serial = optarg;
+        break;
+      case 'K': {                                     // host or host:port
+        static char kh[84]; char *colon;
+        snprintf(kh, sizeof(kh), "%s", optarg);
+        colon = strrchr(kh, ':');
+        if (colon != NULL && strchr(kh, ':') == colon) { *colon = '\0'; iq_opt.kiwi_port = atoi(colon + 1); }
+        iq_opt.kiwi_host = kh; source = "kiwi";
+        break; }
+      case 'W':
+        iq_opt.kiwi_password = optarg;
         break;
       case 'D':
         iq_opt.rtl_direct_sampling = atoi(optarg);
@@ -988,7 +1014,7 @@ int main(int argc, char *argv[])
        // be opened or when it is lost. Exit instead of staying alive without
        // receiving: a service manager can then restart us.
        failed = run_source(source);
-       if (failed < 0) { printf("unknown source '%s' (sdrplay, rtlsdr or file)\n", source); return 1; }
+       if (failed < 0) { printf("unknown source '%s' (sdrplay, rtlsdr, kiwi or file)\n", source); return 1; }
    }
 
    if(debug_mode) { EndWav(); }

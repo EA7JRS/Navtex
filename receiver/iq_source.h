@@ -35,6 +35,9 @@ struct iq_options {
     int rtl_ppm;              /* -P  crystal correction */
     const char *file_path;    /* -f  recording to decode instead of a receiver */
     int file_realtime;        /* -t  play the recording at real speed */
+    const char *kiwi_host;    /* -K  KiwiSDR: its name or address */
+    int kiwi_port;            /*     and its port (8073) */
+    const char *kiwi_password; /* -W  its password, when it has one */
 };
 extern struct iq_options iq_opt;
 
@@ -67,6 +70,11 @@ void iq_demodulate_short(const short *interleaved_iq, unsigned int num_pairs);
 int sdrplay_source_run(void);
 int rtlsdr_source_run(void);
 int file_source_run(void);
+int kiwi_source_run(void);
+
+/* Where the KiwiSDR says it is (when kiwi_has_position) */
+extern double kiwi_lat, kiwi_lon;
+extern volatile sig_atomic_t kiwi_has_position;
 
 #ifdef __cplusplus
 }

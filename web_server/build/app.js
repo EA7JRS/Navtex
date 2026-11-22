@@ -230,7 +230,7 @@
     var st = estado[p + 'state'] || '';
     var vivo = Date.parse(estado[p + 'receiver_alive'] || '');
     var fresco = isFinite(vivo) && ahora - vivo < 3 * 60000;
-    var origen = estado[p + 'source'] === 'rtlsdr' ? 'RTL-SDR' : estado[p + 'source'] === 'sdrplay' ? 'SDRplay' : '';
+    var origen = estado[p + 'source'] === 'rtlsdr' ? 'RTL-SDR' : estado[p + 'source'] === 'sdrplay' ? 'SDRplay' : estado[p + 'source'] === 'kiwi' ? 'KiwiSDR' : '';
     var banda = estado[p + 'band'] === 'hf' ? tr('4209,5 kHz') : tr('518 y 490 kHz');
     if (st === 'off') return { ok: null, texto: tr('Apagado'), detalle: tr('se enciende en Receptores') };
     if (st === 'receiving' && fresco) return { ok: true, texto: tr('Recibiendo'), detalle: banda + (origen ? ' · ' + origen : '') };
@@ -693,7 +693,7 @@
       t.appendChild(enc);
 
       var r1 = crear('div', 'rejilla');
-      r1.appendChild(campo(tr('Equipo'), selector('rx' + n + '-source', [['sdrplay', 'SDRplay'], ['rtlsdr', 'RTL-SDR']], equipo,
+      r1.appendChild(campo(tr('Equipo'), selector('rx' + n + '-source', [['sdrplay', 'SDRplay'], ['rtlsdr', 'RTL-SDR'], ['kiwi', 'KiwiSDR']], equipo,
         function (x) { ponerAjuste(p + 'source', x).then(pintarReceptores); })));
       r1.appendChild(campo(tr('Banda'), selector('rx' + n + '-band', [['mf', tr('518 y 490 kHz')], ['hf', tr('4209,5 kHz (onda corta)')], ['auto', tr('Por horario: las dos')]], banda,
         function (x) { ponerAjuste(p + 'band', x).then(pintarReceptores); })));
@@ -719,7 +719,16 @@
       }
 
       var r2 = crear('div', 'rejilla');
-      if (equipo === 'sdrplay') {
+      if (equipo === 'kiwi') {
+        var clave = texto('rx' + n + '-kiwi-pass', v('kiwi_pass', ''), tr('ninguna'),
+          function (x) { ponerAjuste(p + 'kiwi_pass', x.replace(/[^A-Za-z0-9._+!@*-]/g, '').slice(0, 40)).then(pintarReceptores); });
+        clave.type = 'password';
+        r2.appendChild(campo(tr('Nombre o dirección del KiwiSDR'), texto('rx' + n + '-kiwi-host', v('kiwi_host', ''), 'kiwisdr.local',
+          function (x) { ponerAjuste(p + 'kiwi_host', x.replace(/[^A-Za-z0-9.:-]/g, '').slice(0, 80)).then(pintarReceptores); })));
+        r2.appendChild(campo(tr('Puerto'), texto('rx' + n + '-kiwi-port', v('kiwi_port', '8073'), '8073',
+          function (x) { var k = Math.round(Number(x)); ponerAjuste(p + 'kiwi_port', String(isFinite(k) && k >= 1 && k <= 65535 ? k : 8073)).then(pintarReceptores); })));
+        r2.appendChild(campo(tr('Contraseña (si la pide)'), clave));
+      } else if (equipo === 'sdrplay') {
         r2.appendChild(campo(tr('Toma de antena (RSPdx)'), selector('rx' + n + '-port', [['A', 'A'], ['B', 'B'], ['C', 'C']], v('port', 'A'),
           function (x) { ponerAjuste(p + 'port', x); })));
       } else {
@@ -735,6 +744,12 @@
           function (x) { ponerAjuste(p + 'ppm', /^-?\d{1,3}$/.test(x) ? x : '0').then(pintarReceptores); })));
       }
       t.appendChild(r2);
+      if (equipo === 'kiwi') {
+        t.appendChild(crear('p', 'nota', tr('Un KiwiSDR es un receptor en la red: el suyo o el de otra persona. Da 12 kHz por canal: en 518 y 490 kHz Navtex le toma dos canales a la vez, y uno en onda corta. Queda conectado todo el tiempo: los públicos limitan el tiempo de cada visitante y tienen dueño, así que para esto use uno propio o pida permiso. Sin cifrar (ws://), con la contraseña a la vista de quien abra esta página.')
+          + (estado && estado[p + 'kiwi_position'] ? ' ' + tr('El KiwiSDR dice estar en ') + String(estado[p + 'kiwi_position']).replace(',', ', ') + tr(': el alcance de las estaciones debe mirarse desde ahí (pestaña Estaciones, Mi posición).') : '')));
+        raiz.appendChild(t);
+        return;
+      }
 
       var bt = crear('label', 'casilla');
       var cb = crear('input'); cb.type = 'checkbox'; cb.id = 'rx' + n + '-bias'; cb.checked = v('bias', '0') === '1';
@@ -790,6 +805,8 @@
       function (x) { var n = Math.round(Number(x)); ponerAjuste('retention_hours', String(isFinite(n) ? Math.min(8760, Math.max(72, n)) : 72)).then(pintarSalida); })));
     r.appendChild(campo(tr('NMEA 0183 por UDP: destino (equipo:puerto; vacío, apagado)'), texto('nrx-udp', v('nrx.udp', ''), '192.168.1.255:10110',
       function (x) { ponerAjuste('nrx.udp', /^[A-Za-z0-9.-]{1,70}:\d{1,5}$/.test(x) ? x : '').then(pintarSalida); })));
+    r.appendChild(campo(tr('Signal K por UDP: destino (equipo:puerto; vacío, apagado)'), texto('nrx-signalk', v('nrx.signalk', ''), 'openplotter.local:8375',
+      function (x) { ponerAjuste('nrx.signalk', /^[A-Za-z0-9.-]{1,70}:\d{1,5}$/.test(x) ? x : '').then(pintarSalida); })));
     r.appendChild(campo(tr('NMEA 0183 por TCP: puerto del servidor (0, apagado)'), texto('nrx-tcp', v('nrx.tcp', '0'), '10110',
       function (x) { var n = Math.round(Number(x)); ponerAjuste('nrx.tcp', String(isFinite(n) && n >= 1024 && n <= 65535 ? n : 0)).then(pintarSalida); })));
     r.appendChild(campo(tr('Gestión de alertas de puente (sentencias ALF, ALC y HBT; acepta ACN)'), selector('nrx-bam', [['off', tr('Apagada (solo ALR y ACK)')], ['on', tr('Encendida')]], v('nrx.bam', 'off'),
@@ -801,6 +818,7 @@
     pedir('/api/nrx').then(function (j) {
       var partes = [];
       if (j.udp) partes.push(tr('UDP a ') + j.udp);
+      if (j.signalk) partes.push(tr('Signal K a ') + j.signalk);
       if (j.tcp) partes.push(tr('servidor TCP en el puerto ') + j.tcp + ' (' + j.clients + (j.clients === 1 ? tr(' programa conectado') : tr(' programas conectados')) + ')');
       est.textContent = (partes.length ? tr('Salida NMEA: ') + partes.join(tr(' y ')) + tr('. Mensajes enviados desde que arrancó: ') + j.sent + '.' : tr('Salida NMEA apagada.'))
         + (j.error ? tr(' Último fallo: ') + j.error + '.' : '');

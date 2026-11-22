@@ -355,6 +355,38 @@ main (void)
   }
   CHECK (set_setting ("nrx.format", "iec") == 0 && set_setting ("nrx.format", "furuno") == 0 && set_setting ("nrx.format", "x") != 0, "NRX form");
 
+  /* Signal K deltas */
+  {
+    char *d = signalk_message ("GA05", 518, "2026-11-22T09:07:00Z", "ZCZC GA05\nCADIZ \"RADIO\"\nGALE WARNING\n", 1);
+    cJSON *j = d != NULL ? cJSON_Parse (d) : NULL;
+    cJSON *u = cJSON_GetArrayItem (cJSON_GetObjectItemCaseSensitive (j, "updates"), 0);
+    cJSON *v = cJSON_GetArrayItem (cJSON_GetObjectItemCaseSensitive (u, "values"), 0);
+    cJSON *val = cJSON_GetObjectItemCaseSensitive (v, "value");
+    CHECK (d != NULL && j != NULL && d[strlen (d) - 1] == '\n' && strchr (d, '\n') == d + strlen (d) - 1, "Signal K: one line of valid JSON");
+    CHECK (cJSON_GetArraySize (cJSON_GetObjectItemCaseSensitive (j, "updates")) == 1 && strcmp (cJSON_GetObjectItemCaseSensitive (u, "timestamp")->valuestring, "2026-11-22T09:07:00Z") == 0
+           && strcmp (cJSON_GetObjectItemCaseSensitive (cJSON_GetObjectItemCaseSensitive (u, "source"), "label")->valuestring, "navtex") == 0, "Signal K: one update, with its time and its source");
+    CHECK (strcmp (cJSON_GetObjectItemCaseSensitive (v, "path")->valuestring, "communication.navtex.518.GA05") == 0, "Signal K: the path of the message");
+    CHECK (strcmp (cJSON_GetObjectItemCaseSensitive (val, "station")->valuestring, "G") == 0 && strcmp (cJSON_GetObjectItemCaseSensitive (val, "subject")->valuestring, "A") == 0
+           && cJSON_GetObjectItemCaseSensitive (val, "frequency")->valuedouble == 518000 && cJSON_IsTrue (cJSON_GetObjectItemCaseSensitive (val, "complete")), "Signal K: station, subject, frequency in Hz");
+    CHECK (strcmp (cJSON_GetObjectItemCaseSensitive (val, "text")->valuestring, "ZCZC GA05\nCADIZ \"RADIO\"\nGALE WARNING\n") == 0, "Signal K: the text comes back as it went in, quotes and line ends included");
+    cJSON_Delete (j); free (d);
+    d = signalk_message ("SE12", 4209, "2026-11-22T19:00:00Z", "x", 0);
+    CHECK (d != NULL && strstr (d, "\"communication.navtex.4209.SE12\"") != NULL && strstr (d, "\"frequency\":4209500") != NULL && strstr (d, "\"complete\":false") != NULL, "Signal K: short wave, a message cut short");
+    free (d);
+    CHECK (signalk_message ("GA5", 518, "2026-11-22T09:07:00Z", "x", 1) == NULL && signalk_message ("GA05", 500, "2026-11-22T09:07:00Z", "x", 1) == NULL
+           && signalk_message ("GA05", 518, "2026-11-22 09:07", "x", 1) == NULL && signalk_message ("ga05", 518, "2026-11-22T09:07:00Z", "x", 1) == NULL, "Signal K: bad input gives nothing");
+    d = signalk_alarm (1, "2026-11-22T09:08:00Z");
+    CHECK (d != NULL && strstr (d, "\"path\":\"notifications.navtex.sar\"") != NULL && strstr (d, "\"state\":\"alarm\"") != NULL && strstr (d, "\"method\":[\"visual\",\"sound\"]") != NULL, "Signal K: the alarm is a notification");
+    free (d);
+    d = signalk_alarm (0, "2026-11-22T09:20:00Z");
+    CHECK (d != NULL && strstr (d, "\"state\":\"normal\"") != NULL && strstr (d, "\"method\":[]") != NULL && signalk_alarm (1, "now") == NULL, "Signal K: and goes back to normal when acknowledged");
+    free (d);
+    CHECK (set_setting ("nrx.signalk", "openplotter.local:8375") == 0 && set_setting ("nrx.signalk", "") == 0 && set_setting ("nrx.signalk", "nohost") != 0, "Signal K destination");
+    CHECK (set_setting ("rx1.source", "kiwi") == 0 && set_setting ("rx1.kiwi_host", "kiwi.example.org") == 0 && set_setting ("rx1.kiwi_host", "a b") != 0
+           && set_setting ("rx2.kiwi_port", "8073") == 0 && set_setting ("rx2.kiwi_port", "0") != 0 && set_setting ("rx1.kiwi_pass", "s3cret") == 0 && set_setting ("rx1.kiwi_pass", "a b") != 0, "a KiwiSDR as a receiver");
+    set_setting ("rx1.source", "sdrplay");
+  }
+
   unlink (DATA_FILE);
   printf ("%d checks, %d failed\n", checks, failed);
   return failed != 0;

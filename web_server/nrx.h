@@ -63,6 +63,16 @@ void hbt_sentence (char *out, size_t out_size, int interval, int seq);
 void arc_sentence (char *out, size_t out_size, int hhmmss, long identifier, long instance, char command);
 int acn_parse (const char *text, long *identifier, long *instance, char *command);
 
+/* Signal K: a message, and the search and rescue alarm, as deltas (one line of JSON each, to free()).
+   Signal K has no path of its own for NAVTEX: the message goes in
+     communication.navtex.<490|518|4209>.<identity>
+   as an object (identity, station and subject letters, frequency in Hz, when it was received, whether
+   it reached its NNNN, and the text), which is not in the specification; the alarm is a notification,
+   which is:  notifications.navtex.sar  with state "alarm" while it waits to be acknowledged and
+   "normal" after. received and now: "YYYY-MM-DDTHH:MM:SSZ". NULL when the input is not valid. */
+char *signalk_message (const char *bbbb, int freq, const char *received, const char *message, int complete);
+char *signalk_alarm (int active, const char *now);
+
 /* Starts the background sender. It reads its two settings every few seconds, so a
    change needs no restart:  nrx.udp     "host:port" to send datagrams to (empty: off)
                              nrx.tcp     port of a server other programs connect to (0: off)

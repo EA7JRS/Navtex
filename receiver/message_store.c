@@ -921,6 +921,8 @@ int valid_setting(const char *tag, const char *value) {
         if (strcmp(tag, "retention_hours") == 0) return all_of(value, "0123456789", 4) && value[0] != '\0' && atoi(value) >= 72 && atoi(value) <= 8760;
         // NMEA 0183 output (NRX sentences): UDP destination "host:port" and TCP server port; empty or 0 = off
         if (strcmp(tag, "nrx.udp") == 0) return valid_host_port(value);
+        // a Signal K server that listens for deltas on a UDP port (data connection of type "Signal K", source UDP)
+        if (strcmp(tag, "nrx.signalk") == 0) return valid_host_port(value);
         // form of the NRX sentence: the one of Furuno's receivers, or the one of IEC 61097-6 (annex C)
         if (strcmp(tag, "nrx.format") == 0) return one_of(value, "furuno", "iec", NULL, NULL);
         if (strcmp(tag, "nrx.bam") == 0) return one_of(value, "on", "off", NULL, NULL);
@@ -932,7 +934,11 @@ int valid_setting(const char *tag, const char *value) {
         if ((strncmp(tag, "rx1.", 4) != 0 && strncmp(tag, "rx2.", 4) != 0)) return 0;
         key = tag + 4;
         if (strcmp(key, "enabled") == 0 || strcmp(key, "bias") == 0) return one_of(value, "0", "1", NULL, NULL);
-        if (strcmp(key, "source") == 0)   return one_of(value, "sdrplay", "rtlsdr", NULL, NULL);
+        if (strcmp(key, "source") == 0)   return one_of(value, "sdrplay", "rtlsdr", "kiwi", NULL);
+        // a KiwiSDR on the network: name or address, port, password (nothing that breaks the command it goes in)
+        if (strcmp(key, "kiwi_host") == 0) return all_of(value, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.-:", 80);
+        if (strcmp(key, "kiwi_port") == 0) return value[0] != '\0' && all_of(value, "0123456789", 5) && atoi(value) >= 1 && atoi(value) <= 65535;
+        if (strcmp(key, "kiwi_pass") == 0) return all_of(value, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-+!@*", 40);
         if (strcmp(key, "band") == 0)     return one_of(value, "mf", "hf", "auto", NULL);
         if (strcmp(key, "hf_slots") == 0) return valid_slots(value);
         if (strcmp(key, "port") == 0)     return one_of(value, "A", "B", "C", NULL);

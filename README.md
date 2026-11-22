@@ -1,6 +1,6 @@
 # Navtex
 
-Receptor NAVTEX por software para Linux, con SDRplay o RTL-SDR. Escucha en segundo plano 518 y 490 kHz a la vez, o 4209,5 kHz en onda corta, guarda los mensajes y los enseña en una interfaz web en español que funciona sin Internet.
+Receptor NAVTEX por software para Linux, con SDRplay, RTL-SDR o un KiwiSDR de la red. Escucha en segundo plano 518 y 490 kHz a la vez, o 4209,5 kHz en onda corta, guarda los mensajes y los enseña en una interfaz web en español que funciona sin Internet.
 
 Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.com/bartelvdh/Navtex) · GPL-3.0-or-later · parte del ecosistema APRS LoRa+
 
@@ -42,7 +42,7 @@ Probado el 22-11-2026 en un Intel NUC con Debian 13:
 - la interfaz web desde otros equipos de la red;
 - el descodificador, con dos grabaciones reales de NAVTEX.
 
-Probado el mismo día fuera del NUC, con el programa real y esas grabaciones: las reglas del receptor, la exportación, la salida NMEA 0183 por UDP y TCP (sentencias `NRX`, `ALR`, `ACK`, `NRM` y las de gestión de alertas del puente `ALF`, `ALC`, `HBT`, `ACN` y `ARC`) y la alarma de búsqueda y salvamento, esta con un mensaje escrito para la prueba y nunca emitido. `make check` repite 113 comprobaciones.
+Probado el mismo día fuera del NUC, con el programa real y esas grabaciones: las reglas del receptor, la exportación, la salida NMEA 0183 por UDP y TCP (sentencias `NRX`, `ALR`, `ACK`, `NRM` y las de gestión de alertas del puente `ALF`, `ALC`, `HBT`, `ACN` y `ARC`) y la alarma de búsqueda y salvamento, esta con un mensaje escrito para la prueba y nunca emitido. `make check` repite 124 comprobaciones.
 
 **Sin probar todavía:** la recepción de un mensaje completo del aire, una emisión real en 4209,5 kHz, la salida NMEA 0183 con un plotter y la gestión de alertas con un equipo de puente real. El detalle de cada parte está en el [historial de cambios](CHANGELOG.md).
 
@@ -199,7 +199,9 @@ Los servicios lo arrancan con `-n 1` y `-n 2`. A mano sirve para probar un equip
 | :--- | :--- |
 | `-h` | Ayuda con todas las opciones |
 | `-n 1` o `-n 2` | Receptor 1 o 2: toma todos los ajustes de la web y sigue sus cambios sin reiniciar |
-| `-s sdrplay` \| `rtlsdr` \| `file` | Tipo de equipo (de serie, SDRplay si está compilado; si no, RTL-SDR) |
+| `-s sdrplay` \| `rtlsdr` \| `kiwi` \| `file` | Tipo de equipo (de serie, SDRplay si está compilado; si no, RTL-SDR) |
+| `-K <equipo[:puerto]>` | Un KiwiSDR de la red como receptor (puerto 8073) |
+| `-W <contraseña>` | Su contraseña, si la pide |
 | `-B mf` \| `hf` | Banda: 518 y 490 kHz a la vez (de serie), o solo 4209,5 kHz |
 | `-b` | Alimenta la antena por el coaxial (bias T) |
 | `-p A` \| `B` \| `C` | SDRplay: toma de antena (RSPdx, RSPdx-R2) |
@@ -244,7 +246,7 @@ Como servicio toma el puerto, la dirección y el gpsd de `/etc/default/navtex` (
 | `autoreconf -i && automake --add-missing; autoreconf` | Genera `configure` (tras clonar o actualizar) |
 | `./configure` | Comprueba las librerías y prepara la compilación |
 | `make` | Compila `navtexreceiver` y `navtexwebserver` |
-| `make check` | Pasa las pruebas (113 comprobaciones) |
+| `make check` | Pasa las pruebas (124 comprobaciones) |
 | `sudo make install` | Instala los programas y la interfaz; conserva la base de datos |
 | `sudo make uninstall` | Quita los programas |
 | `make clean` | Borra lo compilado |
@@ -458,6 +460,19 @@ El pitido depende del navegador: la mayoría no deja sonar una página hasta que
 
 **Conservación.** De serie, un mensaje se borra a las 72 horas de la última vez que se oyó. Se puede alargar hasta un año (pestaña Receptores). Mientras la estación lo siga emitiendo, no se borra.
 
+## KiwiSDR
+
+Un [KiwiSDR](http://kiwisdr.com) es un receptor de 0 a 30 MHz que se usa por la red; puede ser el suyo o el de otra persona. En **Receptores**, en *Equipo*, elija *KiwiSDR* y escriba su nombre o dirección, el puerto (8073) y la contraseña si la pide.
+
+- **Dos canales en onda media.** Un KiwiSDR da 12 kHz por canal y 518 y 490 kHz están a 28 kHz: Navtex le toma dos canales a la vez, uno en cada frecuencia. En 4209,5 kHz, uno. Un KiwiSDR tiene 4 u 8 canales en total.
+- **Queda conectado.** NAVTEX se escucha todo el día. Los KiwiSDR públicos limitan el tiempo de cada visitante, a veces no admiten dos conexiones desde la misma dirección, y tienen dueño: para esto use uno propio o pida permiso. Si está lleno o corta, Navtex lo dice en su registro y vuelve a probar al minuto.
+- **La posición es la del KiwiSDR.** El alcance de las estaciones debe mirarse desde donde está el receptor: la página dice la posición que declara, para escribirla en *Estaciones > Mi posición*.
+- **Sin cifrar.** La conexión es `ws://` y la contraseña se guarda como un ajuste más, a la vista de quien abra la página.
+
+El protocolo es el del cliente de referencia, [kiwiclient](https://github.com/jks-prv/kiwiclient), leído de su código; no se copia nada de él. **Probado** contra un KiwiSDR de pega que emite una grabación real de NAVTEX (Mondolfo, 518 kHz): el mensaje se descodifica y se guarda. **Sin probar con un KiwiSDR de verdad.**
+
+![KiwiSDR y Signal K en la pestaña Receptores](docs/img/kiwi_signalk.png)
+
 ## Salida NMEA 0183
 
 Cada mensaje nuevo sale en sentencias `NRX`, en una de dos formas:
@@ -509,6 +524,27 @@ Se ajusta en la pestaña Receptores:
 - **TCP**: puerto de un servidor al que se conectan los programas (hasta 8 a la vez).
 
 Solo salen los mensajes que llegan desde que se enciende la salida, no los ya guardados. La salida no tiene contraseña; de quien se conecta por TCP solo se atienden las sentencias `ACK`, `ACN`, `NRM` y `CRQ`. Con ellas se puede apagar la alarma y cambiar qué estaciones y temas se siguen, igual que desde la interfaz web: úsela solo en una red de confianza.
+
+### Signal K, OpenPlotter y OpenCPN
+
+| Programa | Cómo llegan los mensajes | Qué hace con ellos |
+| :--- | :--- | :--- |
+| **Signal K** (también el de OpenPlotter) | *Signal K por UDP*: escriba `equipo:puerto` del servidor. En el servidor: *Server > Data Connections > Add*, tipo de datos **Signal K**, origen **UDP**, y ese puerto | Cada mensaje queda en `communication.navtex.<frecuencia>.<identidad>` y la alarma de búsqueda y salvamento sale como aviso en `notifications.navtex.sar` |
+| **OpenCPN** (también el de OpenPlotter) | *NMEA 0183 por UDP* hacia su equipo, o una conexión de red de OpenCPN, TCP, al puerto del servidor de Navtex | Recibe las sentencias `NRX` y `ALR` (se ven en su ventana de depuración de NMEA). Hasta donde sé, OpenCPN no enseña los mensajes NAVTEX por sí mismo |
+| **OpenPlotter** | Es una Raspberry con Signal K y OpenCPN: valen las dos filas de arriba | Los avisos de Signal K los enseñan sus propias aplicaciones |
+
+Lo que se manda a Signal K es un «delta» por mensaje, una línea de JSON por datagrama:
+
+```json
+{"updates":[{"source":{"label":"navtex","type":"NAVTEX"},"timestamp":"2026-11-22T09:07:00Z",
+ "values":[{"path":"communication.navtex.518.GA05",
+  "value":{"id":"GA05","station":"G","subject":"A","frequency":518000,
+           "received":"2026-11-22T09:07:00Z","complete":true,"text":"ZCZC GA05\n..."}}]}]}
+```
+
+- **La ruta de los mensajes no es de la norma.** Signal K no tiene una ruta para NAVTEX: `communication.navtex…` es propia de este programa. Los avisos (`notifications.…`, con `state` `alarm` mientras la alarma espera y `normal` al reconocerla) sí siguen la especificación, así que cualquier programa que enseñe avisos de Signal K, como el plotter APRS LoRa+, la muestra.
+- **Solo va hacia Signal K.** La alarma no se reconoce desde Signal K: se reconoce en la página o por la sentencia `ACK`.
+- **Sin probar contra un servidor Signal K ni contra OpenCPN.** Está comprobado que los deltas salen por UDP con la forma de arriba; que el servidor los acepte tal cual está por ver.
 
 **NMEA 2000.** No existe un mensaje normalizado de NMEA 2000 para el texto de NAVTEX; la salida normalizada es la sentencia `NRX` de NMEA 0183. Este programa no inventa uno: al bus llegan a través de S.A.T.-APRS+, que los recoge por la API.
 
