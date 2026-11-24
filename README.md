@@ -20,7 +20,7 @@ Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.c
 | :--- | :--- |
 | Recepción en segundo plano | Los mensajes se guardan aunque nadie esté mirando; cada estación emite cada cuatro horas, en su turno de diez minutos |
 | Tres frecuencias | 518 kHz (internacional) y 490 kHz (nacional) a la vez con un receptor; 4209,5 kHz (onda corta) con el mismo receptor por horario, o con un segundo receptor a la vez |
-| Dos tipos de receptor | SDRplay (RSP1A, RSP1B, RSP2, RSPdx, RSPdx-R2) y RTL-SDR (muestreo directo, conversor integrado o externo) |
+| Tres tipos de receptor | SDRplay (RSP1A, RSP1B, RSP2, RSPdx, RSPdx-R2), RTL-SDR (muestreo directo, conversor integrado o externo) y [KiwiSDR](#kiwisdr) por la red, sin equipo propio |
 | Dos receptores a la vez | Cada uno con su equipo y su banda, ajustados desde la web y sin reiniciar nada |
 | Interfaz web | En español o en inglés, adaptada al móvil y sin cargar nada de Internet. Aspecto del sistema, automático por la salida y la puesta del sol, claro, oscuro o de noche (rojo) |
 | Estaciones del mundo | 263 estaciones con letra, posición, horas, alcance e idioma; ordenadas por distancia desde la posición propia |
@@ -31,6 +31,7 @@ Navtex · © 2026 Manuel - EA7JRS · fork de [bartelvdh/Navtex](https://github.c
 | Conservar y guardar | Los mensajes no se pueden borrar a mano (MSC.508(105), 6.1.1): salen solos al cumplir su tiempo; marcar mensajes para conservarlos siempre; guardar todos en un archivo de texto o CSV; tiempo de conservación ajustable |
 | Alarma de búsqueda y salvamento | Un mensaje del tema D da una alarma, en pantalla y sonora, que solo se apaga a mano |
 | Salida NMEA 0183 | Cada mensaje nuevo en sentencias `NRX` (forma de Furuno o de la norma IEC 61097-6) y la alarma en `ALR` (y, si se enciende, con las sentencias de gestión de alertas del puente `ALF`, `ALC` y `HBT`), por UDP y por un servidor TCP. Por TCP admite `ACK` o `ACN` para apagar la alarma y `NRM` para ver y cambiar desde otro equipo las estaciones y temas que se siguen |
+| Signal K, OpenPlotter y OpenCPN | Cada mensaje y la alarma de búsqueda y salvamento, como «deltas» de [Signal K](#signal-k-openplotter-y-opencpn) por UDP; OpenCPN recibe las sentencias NMEA |
 
 ## Estado de las pruebas
 
@@ -44,7 +45,9 @@ Probado el 22-11-2026 en un Intel NUC con Debian 13:
 
 Probado el mismo día fuera del NUC, con el programa real y esas grabaciones: las reglas del receptor, la exportación, la salida NMEA 0183 por UDP y TCP (sentencias `NRX`, `ALR`, `ACK`, `NRM` y las de gestión de alertas del puente `ALF`, `ALC`, `HBT`, `ACN` y `ARC`) y la alarma de búsqueda y salvamento, esta con un mensaje escrito para la prueba y nunca emitido. `make check` repite 124 comprobaciones.
 
-**Sin probar todavía:** la recepción de un mensaje completo del aire, una emisión real en 4209,5 kHz, la salida NMEA 0183 con un plotter y la gestión de alertas con un equipo de puente real. El detalle de cada parte está en el [historial de cambios](CHANGELOG.md).
+Probado el 23-11-2026, versión 1.8.0: instalada y en marcha en ese NUC; el **KiwiSDR**, contra uno de pega que emite una grabación real de NAVTEX (el mensaje se descodifica y se guarda); y la salida a **Signal K**, viendo salir los «deltas» por UDP.
+
+**Sin probar todavía:** la recepción de un mensaje completo del aire, una emisión real en 4209,5 kHz, un KiwiSDR de verdad, la salida NMEA 0183 con un plotter, la salida a un servidor Signal K o a OpenCPN y la gestión de alertas con un equipo de puente real. El detalle de cada parte está en el [historial de cambios](CHANGELOG.md).
 
 ## Vista previa
 
@@ -54,7 +57,7 @@ Probado el mismo día fuera del NUC, con el programa real y esas grabaciones: la
 | Lista por frecuencia y tema, con el texto, la calidad de la recepción y «Conservar siempre» | Las 263 estaciones por distancia, con su próxima emisión y qué se sigue |
 | **Receptores** | **Aspecto** |
 | [![Receptores](docs/img/receptores.png)](docs/img/receptores.png) | [![Aspecto](docs/img/aspecto.png)](docs/img/aspecto.png) |
-| Equipo y banda de cada receptor, conservación y salida NMEA 0183 | Sistema, automático por el sol, claro, oscuro o noche; español o inglés |
+| Equipo (SDRplay, RTL-SDR o KiwiSDR) y banda de cada receptor, conservación, salida NMEA 0183 y Signal K | Sistema, automático por el sol, claro, oscuro o noche; español o inglés |
 
 Cada apartado de la interfaz se explica en [La interfaz web](#la-interfaz-web).
 
@@ -63,8 +66,9 @@ Cada apartado de la interfaz se explica en [La interfaz web](#la-interfaz-web).
 - Un equipo con Linux. Está hecho y probado en Debian 13; un procesador modesto basta.
 - Un receptor:
   - **SDRplay**, con su API 3.15 o posterior instalada ([sdrplay.com/api](https://www.sdrplay.com/api/)); o
-  - **RTL-SDR** que llegue a onda media: por muestreo directo (Nooelec NESDR SMArt v5, RTL-SDR Blog V3), con conversor integrado (RTL-SDR Blog V4) o con conversor externo.
-- Una antena para 490–518 kHz. Las antenas activas de NAVTEX necesitan alimentación; véase [Antenas](#antenas).
+  - **RTL-SDR** que llegue a onda media: por muestreo directo (Nooelec NESDR SMArt v5, RTL-SDR Blog V3), con conversor integrado (RTL-SDR Blog V4) o con conversor externo; o
+  - un **KiwiSDR** de la red, el suyo o uno con permiso de su dueño: no hace falta ningún equipo enchufado ni ninguna librería (véase [KiwiSDR](#kiwisdr)).
+- Una antena para 490–518 kHz (con un KiwiSDR, la antena es la suya). Las antenas activas de NAVTEX necesitan alimentación; véase [Antenas](#antenas).
 - Opcional: un GPS servido por gpsd, para la posición propia.
 
 ### Dependencias y librerías
@@ -82,7 +86,7 @@ Cada apartado de la interfaz se explica en [La interfaz web](#la-interfaz-web).
 | API de SDRplay 3.15 o posterior | Receptores SDRplay. No está en Debian: se baja de [sdrplay.com/api](https://www.sdrplay.com/api/) y se instala con su propio instalador | Solo con SDRplay |
 | `gpsd` | Posición propia | Opcional |
 
-`./configure` comprueba cada librería y dice al final qué receptores quedan incluidos. Hace falta al menos uno de los dos (RTL-SDR o SDRplay). Las licencias de cada librería están en [COPYING.md](COPYING.md).
+`./configure` comprueba cada librería y dice al final qué receptores quedan incluidos. Para un equipo enchufado hace falta al menos uno de los dos (RTL-SDR o SDRplay); sin ninguno, el programa compila igual y recibe con un KiwiSDR o descodifica grabaciones. Las licencias de cada librería están en [COPYING.md](COPYING.md).
 
 ## Instalación
 
@@ -145,7 +149,9 @@ sudo make install
 sudo systemctl restart navtex-web navtex-receiver@1 navtex-receiver@2
 ```
 
-La base de datos con los mensajes y los ajustes se conserva (`Keeping the existing /opt/Navtex/Navtex.db`). Después, recargue la página con Ctrl+F5.
+La base de datos con los mensajes y los ajustes se conserva (`Keeping the existing /opt/Navtex/Navtex.db`). Después, recargue la página con Ctrl+F5: la versión instalada se lee bajo el nombre, en la cabecera, y en `curl -s http://127.0.0.1:8080/api/status`.
+
+La carpeta del código puede estar donde quiera (por ejemplo `/opt/navtex-src`), pero no es `/opt/Navtex`: esa es la de los datos, y **no se borra** (guarda `Navtex.db` y la interfaz instalada).
 
 ### Desinstalar
 
@@ -275,7 +281,7 @@ Todas las llamadas están en [API](#api). La salida NMEA 0183 por TCP se puede m
 
 ## La interfaz web
 
-La cabecera tiene las tres pestañas (Mensajes, Estaciones y Receptores) y, a la derecha, el botón de aspecto, el de idioma y «Acerca de», con la versión, las normas que sigue y los créditos.
+La cabecera es la de la WebUI de APRS LoRa+: el logotipo, el nombre con la versión debajo y la raya de color. Tiene las tres pestañas (Mensajes, Estaciones y Receptores) y, a la derecha, el botón de aspecto, el de idioma y «Acerca de», con la versión, las normas que sigue y los créditos.
 
 **Idioma.** Español o inglés. De serie, el del navegador; el botón `EN` / `ES` lo cambia y se recuerda en ese navegador. Los mensajes se muestran siempre tal como se reciben.
 
@@ -294,7 +300,7 @@ La cabecera tiene las tres pestañas (Mensajes, Estaciones y Receptores) y, a la
 
 Lista con el tema en claro, la primera línea del texto, la estación, la frecuencia y hace cuánto llegó. El color indica la importancia: salvamento, aviso meteorológico, aviso a los navegantes. Hay marcas de «nuevo», «conservado», «cortado» y «con errores», filtros por frecuencia y por tema, y búsqueda en el texto. Un asterisco en el texto es un carácter que no se pudo recibir bien.
 
-Al abrir un mensaje se ve el texto entero y, debajo, cuándo se recibió, si la estación lo sigue emitiendo, qué estación lo mandó (por su letra y su hora), cuántos caracteres llegaron mal y si llegó fuera de su turno. Dos botones: **Conservar siempre** y **Borrar este mensaje**. Debajo de la lista: **Guardar todos como texto**, **Guardar todos como CSV** y **Borrar todos**.
+Al abrir un mensaje se ve el texto entero y, debajo, cuándo se recibió, si la estación lo sigue emitiendo, qué estación lo mandó (por su letra y su hora), cuántos caracteres llegaron mal y si llegó fuera de su turno. Un botón: **Conservar siempre** (o **Dejar de conservar**). No hay botón de borrar: los mensajes salen solos al cumplir su tiempo (véase [Reglas de un receptor NAVTEX](#reglas-de-un-receptor-navtex)). Debajo de la lista: **Guardar todos como texto** y **Guardar todos como CSV**.
 
 Un mensaje de búsqueda y salvamento (tema D) pone arriba un aviso rojo, con pitido, hasta que se pulsa **Reconocer la alarma**.
 
@@ -313,7 +319,7 @@ En la cabecera de cada mensaje, `ZCZC GA12`, la primera letra es la estación y 
 
 ![Los dos receptores, con la banda por horario](docs/img/receptores.png)
 
-Para cada uno de los dos receptores: encendido, equipo, banda y los ajustes del equipo. El receptor aplica los cambios en unos segundos. Debajo, **Mensajes: conservación y salida NMEA**: las horas que se conserva un mensaje, el destino UDP, el puerto del servidor TCP y la forma de la sentencia `NRX`.
+Para cada uno de los dos receptores: encendido, equipo (SDRplay, RTL-SDR o KiwiSDR), banda y los ajustes del equipo. El receptor aplica los cambios en unos segundos. Debajo, **Mensajes: conservación y salida NMEA**: las horas que se conserva un mensaje, el destino UDP, el puerto del servidor TCP, la forma de la sentencia `NRX` y el destino de **Signal K por UDP**.
 
 | Banda | Qué escucha |
 | :--- | :--- |
@@ -322,10 +328,6 @@ Para cada uno de los dos receptores: encendido, equipo, banda y los ajustes del 
 | Por horario | 518 y 490 kHz, y pasa a 4209,5 kHz en las horas UTC indicadas, desde un minuto antes hasta once después |
 
 Un receptor escucha una banda o la otra: 518 y 490 kHz van juntas porque están a 28 kHz, pero 4209,5 kHz queda a 3,7 MHz. Para las tres a la vez hacen falta dos equipos.
-
-### Aspecto
-
-Claro, oscuro o automático (el del equipo), con el selector de la cabecera. Se recuerda en cada navegador.
 
 ## Receptores
 
@@ -345,6 +347,10 @@ Un RTL-SDR no sintoniza por sí solo estas frecuencias. Hay tres formas de llega
 | Con conversor externo | Apagado; se indica la frecuencia del conversor |
 
 Con 8 bits y sin filtros de entrada, un RTL-SDR recibe NAVTEX peor que un SDRplay: en onda media las emisoras de radiodifusión cercanas lo saturan con facilidad. Una antena de NAVTEX, que solo deja pasar su banda, lo resuelve en buena parte.
+
+### KiwiSDR
+
+Un receptor de la red en lugar de uno enchufado: véase [KiwiSDR](#kiwisdr).
 
 ### Antenas
 
@@ -569,6 +575,8 @@ La interfaz no tiene contraseña: está pensada para la red local o la de a bord
 | «gpsd no contesta» | gpsd parado, o en otro equipo | `systemctl status gpsd`; `NAVTEX_GPSD` en `/etc/default/navtex` |
 | «sin posición · buscando satélites» que no se resuelve | El GPS no entrega datos | `cgps`; con un LBE-1420, véase [Posición por GPS](#posición-por-gps) |
 | La página no carga desde otro equipo | Cortafuegos | Abra el puerto 8080 a la red local |
+| La página enseña la versión anterior tras actualizar | No se compiló o no se reiniciaron los servicios, o el navegador guarda la página vieja | `make && sudo make install`, reinicie los tres servicios y Ctrl+F5 |
+| Con un KiwiSDR, el receptor no pasa de conectar o se corta | Está lleno, limita el tiempo de cada visitante o pide contraseña | Lo dice el estado del receptor y lo reintenta cada minuto; use uno propio o con permiso |
 
 ## Créditos y licencia
 
@@ -586,3 +594,4 @@ Si te resulta útil: [paypal.me/ea7jrs](https://paypal.me/ea7jrs)
 
 - Confirmar con las normas (IEC 62923 y la enmienda de 2019 de IEC 61097-6, de pago) el identificador, la categoría y la prioridad de la alerta de búsqueda y salvamento en la gestión de alertas del puente. Las sentencias ya están hechas desde la 1.7.0 (véase [Salida NMEA 0183](#salida-nmea-0183)); esos tres valores se pusieron sin poder leerlas.
 - Probarlo con un equipo de puente real, y la salida NMEA 0183 con un plotter.
+- Probarlo con un KiwiSDR de verdad, y la salida a Signal K con un servidor y con OpenCPN.
