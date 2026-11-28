@@ -38,6 +38,7 @@ window.NAVTEX_I18N = (function () {
  "Estaciones": "Stations",
  "Receptores": "Receivers",
  "Acerca de": "About",
+ "Configuración": "Settings",
  "Aspecto": "Theme",
  "Idioma": "Language",
  "Sistema": "System",
